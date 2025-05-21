@@ -477,12 +477,7 @@ def agregar_producto():
         categoria_nombre = categoria_var.get()
         entrada_cantidad = int(entry_entrada.get())
         unidad_medida = unidad_medida_var.get()
-        fecha_str = datetime.datetime.now()
-        try:
-            fecha_entrada = datetime.datetime.strptime(fecha_str, "%Y-%m-%d").date()
-        except ValueError:
-            messagebox.showerror("Error de Fecha", "Formato de fecha incorrecto (YYYY-MM-DD).")
-            return
+        fecha_entrada = datetime.datetime.now()
         codigo_producto = generar_codigo(categoria_nombre)
 
         mydb = conectar_mysql()
@@ -2074,20 +2069,21 @@ def generar_reporte_salidas_espera():
         if item_seleccionado:
             item = item_seleccionado[0]
             values = tabla_salidas_espera.item(item, "values")
-            # Los valores en 'values' ahora serán: (codigo, producto, cantidad, departamento_nombre, espera_id)
             if len(values) >= 5:
                 codigo_producto = values[0]
-                producto = values[1]
-                cantidad = values[2]
-                departamento_nombre = values[3] # Ahora obtenemos el nombre del departamento
+                producto_nombre = values[1] # Añadido para el mensaje de éxito
+                cantidad_salida = int(values[2]) # Convertir a int para operaciones
+                departamento_nombre = values[3]
                 espera_id = values[4]
 
                 def confirmar_requisicion():
                     numero_requisicion = entry_requisicion.get()
-                    fecha_salida_str = entry_fecha.get() # Obtener como string
                     
+
                     try:
-                        fecha_salida = datetime.datetime.strptime(fecha_salida_str, "%Y-%m-%d").date()
+                       
+                        fecha_salida = datetime.datetime.now() 
+
                     except ValueError:
                         messagebox.showerror("Error", "Formato de fecha incorrecto (YYYY-MM-DD).")
                         return
@@ -2096,7 +2092,14 @@ def generar_reporte_salidas_espera():
                     if mydb:
                         cursor = mydb.cursor()
                         try:
-                            # Primero, obtener el DepartamentoID a partir del NombreDepartamento
+                            # 1. Obtener el ProductoID y el DepartamentoID
+                            cursor.execute("SELECT ProductoID FROM productos WHERE Codigo = %s", (codigo_producto,))
+                            resultado_prod = cursor.fetchone()
+                            if not resultado_prod:
+                                messagebox.showerror("Error", f"Producto con código '{codigo_producto}' no encontrado.")
+                                return
+                            producto_id_para_salida = resultado_prod[0]
+
                             cursor.execute("SELECT DepartamentoID FROM departamentos WHERE NombreDepartamento = %s", (departamento_nombre,))
                             resultado_dep = cursor.fetchone()
                             if not resultado_dep:
@@ -2104,24 +2107,35 @@ def generar_reporte_salidas_espera():
                                 return
                             departamento_id_para_salida = resultado_dep[0]
 
-                            # Insertar en la tabla de salidas
+                            # 2. Insertar en la tabla de salidas
                             query_insert_salida = """
                                 INSERT INTO salidas (ProductoID, CodigoProducto, Cantidad, FechaSalida, DepartamentoID, NumeroRequisicion)
-                                SELECT ProductoID, Codigo, %s, %s, %s, %s -- Cambiado 'Departamento' a 'DepartamentoID' y se inserta el ID
-                                FROM productos
-                                WHERE Codigo = %s
+                                VALUES (%s, %s, %s, %s, %s, %s)
                             """
-                            cursor.execute(query_insert_salida, (cantidad, fecha_salida, departamento_id_para_salida, numero_requisicion, codigo_producto))
-                            mydb.commit()
-                            messagebox.showinfo("Salida Registrada", "La salida ha sido registrada.")
+                            cursor.execute(query_insert_salida, (producto_id_para_salida, codigo_producto, cantidad_salida, fecha_salida, departamento_id_para_salida, numero_requisicion))
 
-                            # Eliminar de la tabla de salidas en espera
+                            # 3. ACTUALIZAR la tabla 'productos' (¡ESTE ES EL CAMBIO CLAVE!)
+                            query_update_producto = """
+                                UPDATE productos
+                                SET Stock = Stock - %s, FechaSalida = %s, DepartamentoID = %s
+                                WHERE ProductoID = %s
+                            """
+                            cursor.execute(query_update_producto, (cantidad_salida, fecha_salida, departamento_id_para_salida, producto_id_para_salida))
+
+                            # 4. Eliminar de la tabla de salidas en espera
                             query_eliminar_espera = "DELETE FROM salidas_espera WHERE SalidaEsperaID = %s"
                             cursor.execute(query_eliminar_espera, (espera_id,))
-                            mydb.commit()
-                            actualizar_tabla_salidas_espera() # Actualizar la tabla
+
+                            mydb.commit() # Un solo commit para toda la transacción si todo fue bien
+                            messagebox.showinfo("Salida Registrada", f"La salida del producto '{producto_nombre}' al departamento '{departamento_nombre}' ha sido registrada y el inventario actualizado.")
+
+                            actualizar_tabla_salidas_espera() # Refresca la tabla de esperas
+                            # También necesitas refrescar la tabla principal de productos si está visible
+                            # Llama a tu función para actualizar la tabla principal aquí, por ejemplo:
+                            # actualizar_tabla_inventario() # Asegúrate de que esta función exista y sea accesible
+
                         except mysql.connector.Error as err:
-                            mydb.rollback()
+                            mydb.rollback() # Si algo falla, deshace todos los cambios
                             messagebox.showerror("Error", f"Error al confirmar la requisición: {err}")
                         finally:
                             if mydb and mydb.is_connected():
