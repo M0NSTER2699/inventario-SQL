@@ -9,6 +9,8 @@ import shutil
 import os
 from PIL import Image, ImageTk
 import tkinter.simpledialog as simpledialog
+import subprocess
+import threading
 
 import csv
 from tkinter import filedialog, messagebox
@@ -37,21 +39,13 @@ def conectar_mysql():
 
 
 
-
-inventario = {}
-usuarios = {"admin": hashlib.sha256("admin".encode()).hexdigest()}  # Usuario administrador predeterminado
+lista_usuarios_widget = None
 clave_admin = hashlib.sha256("NEVA".encode()).hexdigest()
-salidas_departamentos = []
-entradas_departamentos=[]
-salidas_espera=[]
-datos_consumo_para_guardar = []
-datos_reportes_para_guardar = {
-    "Bajo Stock": [],
-    "Entradas": [],
-    "Salidas": [],
-    "Salidas en Espera": []}
+current_user_role_is_admin = False
 
-#funciones de inicio de sesion
+
+
+
 
 
 
@@ -1408,6 +1402,7 @@ def calcular_consumo_periodo(periodo):
     total_consumo = 0
     fecha_actual = datetime.date.today()
     fecha_inicio = fecha_actual - periodo
+    
 
     mydb = conectar_mysql()
     if mydb:
@@ -2801,7 +2796,7 @@ def exportar_tabla_pdf(tabla_treeview):
     pdf.set_font("Arial", size=7)
     pdf.add_page()
 
-    #  Configuración de Anchos de Columna 
+    
     cols = tabla_treeview["columns"]
     headers = [tabla_treeview.heading(col)["text"] for col in cols]
     available_width = pdf.w - pdf.l_margin - pdf.r_margin
@@ -2835,14 +2830,14 @@ def exportar_tabla_pdf(tabla_treeview):
             remaining_width * 0.10,  
         ]
     else:
-        # Configuración de anchos por defecto si no coinciden los encabezados esperados
+        
         col_widths = [available_width / len(headers)] * len(headers)
 
     total_width = sum(col_widths)
     x_start = (pdf.w - total_width) / 2
     row_height = 7
 
-    # --- Iterar sobre los Datos e Imprimir Filas por página ---
+    
     pdf.set_text_color(0, 0, 0)
     items = tabla_treeview.get_children()
     num_items = len(items)
@@ -2896,12 +2891,308 @@ def exportar_tabla_pdf(tabla_treeview):
     
 
 
-                            # Función para configurar la aplicación
+                            # Función para configurar
+def realizar_copia_seguridad(ventana_config):
+    """
+    Realiza una copia de seguridad de la base de datos MySQL usando mysqldump.
+    """
+    test_connection = conectar_mysql()
+    if not test_connection:
+        messagebox.showerror("Copia de Seguridad Fallida", "No se pudo conectar a la base de datos para realizar la copia de seguridad.", parent=ventana_config)
+        return
+    test_connection.close()
+
+    _host = "127.0.0.1"
+    _user = "root"
+    _password = ""
+    _database = "sistema inventario corpoandes" 
+
+    try:
+        ruta_guardar = filedialog.asksaveasfilename(
+            defaultextension=".sql",
+            filetypes=[("Archivos SQL", "*.sql")],
+            title="Guardar Copia de Seguridad de la Base de Datos"
+        )
+        
+        if not ruta_guardar: 
+            return
+
+        fecha_hora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        nombre_base_sugerido = f"{_database.replace(' ', '_')}_backup_{fecha_hora}.sql"
+
+        ruta_directorio = os.path.dirname(ruta_guardar)
+        nombre_archivo_elegido = os.path.basename(ruta_guardar)
+        
+        if not nombre_archivo_elegido.strip() or not nombre_archivo_elegido.lower().endswith(".sql"):
+            ruta_completa = os.path.join(ruta_directorio, nombre_base_sugerido)
+        else:
+            ruta_completa = ruta_guardar 
+            
+        
+        mysqldump_path = r"C:\xampp\mysql\bin\mysqldump.exe" 
+
+        comando = [
+            mysqldump_path,
+            f"-h{_host}",
+            f"-u{_user}",
+            _database, 
+            f"--result-file={ruta_completa}"
+        ]
+
+        if _password: 
+            comando.insert(3, f"-p{_password}") 
+
+        proceso = subprocess.run(comando, capture_output=True, text=True, shell=True)
+
+        if proceso.returncode == 0:
+            messagebox.showinfo("Copia de Seguridad", f"Copia de seguridad de la base de datos creada:\n{ruta_completa}", parent=ventana_config)
+        else:
+            messagebox.showerror("Error", f"Error al crear la copia de seguridad:\n{proceso.stderr}\nComando ejecutado: {' '.join(comando)}", parent=ventana_config)
+
+    except FileNotFoundError:
+        messagebox.showerror("Error", "No se encontró 'mysqldump'. Asegúrate de que MySQL está instalado y 'mysqldump' está en tu PATH o la ruta especificada es correcta.", parent=ventana_config)
+    except Exception as e:
+        messagebox.showerror("Error", f"Error inesperado al crear la copia de seguridad: {e}", parent=ventana_config)
+
+def _ejecutar_restauracion_en_hilo(ruta_archivo, _host, _user, _password, _database, mysql_path, ventana_config):
+    """
+    Función que contiene la lógica de restauración de la DB y se ejecuta en un hilo separado.
+    """
+    try:
+        comando = [
+            mysql_path,
+            f"-h{_host}",
+            f"-u{_user}",
+            _database
+        ]
+
+        if _password:
+            comando.insert(3, f"-p{_password}")
+        
+        with open(ruta_archivo, 'r', encoding='utf-8') as f:
+            proceso = subprocess.run(comando, stdin=f, capture_output=True, text=True, shell=True)
+
+        if proceso.returncode == 0:
+            ventana_config.after(0, lambda: messagebox.showinfo("Restauración Completada", f"Base de datos restaurada exitosamente desde:\n{ruta_archivo}", parent=ventana_config))
+        else:
+            ventana_config.after(0, lambda: messagebox.showerror("Error de Restauración", f"Error al restaurar la base de datos:\n{proceso.stderr}\nComando ejecutado: {' '.join(comando)}", parent=ventana_config))
+
+    except FileNotFoundError:
+        ventana_config.after(0, lambda: messagebox.showerror("Error", "No se encontró el cliente 'mysql'. Asegúrate de que MySQL está instalado (con XAMPP) y 'mysql.exe' está en la ruta especificada.", parent=ventana_config))
+    except Exception as e:
+        ventana_config.after(0, lambda: messagebox.showerror("Error", f"Ocurrió un error inesperado al restaurar la base de datos: {e}", parent=ventana_config))
+
+def restaurar_copia_seguridad(ventana_config):
+    """
+    Inicia el proceso de restauración de la base de datos en un hilo separado
+    para evitar que la interfaz de usuario se congele.
+    """
+    _host = "127.0.0.1"
+    _user = "root"
+    _password = ""
+    _database = "sistema inventario corpoandes"
+    
+    
+    mysql_path = r"C:\xampp\mysql\bin\mysql.exe" 
+
+    try:
+        ruta_archivo = filedialog.askopenfilename(
+            defaultextension=".sql",
+            filetypes=[("Archivos SQL", "*.sql")],
+            title="Seleccionar Archivo de Copia de Seguridad SQL"
+        )
+
+        if not ruta_archivo:
+            return
+
+        if not messagebox.askyesno("Confirmar Restauración",
+                                    "¡ADVERTENCIA! Esto BORRARÁ Y REEMPLAZARÁ TODOS LOS DATOS ACTUALES DE SU BASE DE DATOS.\n\n¿Está absolutamente seguro de que desea continuar?",
+                                    parent=ventana_config):
+            return
+
+        restauracion_thread = threading.Thread(
+            target=_ejecutar_restauracion_en_hilo,
+            args=(ruta_archivo, _host, _user, _password, _database, mysql_path, ventana_config)
+        )
+        restauracion_thread.start()
+
+        messagebox.showinfo("Iniciando Restauración", "La restauración de la base de datos ha comenzado en segundo plano. La interfaz de usuario no se congelará. Se le notificará cuando termine.", parent=ventana_config)
+
+    except Exception as e:
+        messagebox.showerror("Error", f"Ocurrió un error al iniciar la restauración: {e}", parent=ventana_config)
+
+
+def obtener_usuarios_db():
+    """Obtiene todos los usuarios y su estado de administrador de la base de datos."""
+    db = conectar_mysql()
+    if db:
+        cursor = db.cursor()
+        try:
+            
+            cursor.execute("SELECT NombreUsuario, EsAdmin FROM usuarios")
+            usuarios_data = cursor.fetchall()
+            return usuarios_data 
+        except mysql.connector.Error as err:
+            messagebox.showerror("Error de DB", f"Error al obtener usuarios: {err}")
+            return []
+        finally:
+            cursor.close()
+            db.close()
+    return []
+
+def insertar_usuario_db(nombre, contrasena_hash, es_admin_int):
+    """Inserta un nuevo usuario en la base de datos, asignando EsAdmin (0 o 1)."""
+    db = conectar_mysql()
+    if db:
+        cursor = db.cursor()
+        try:
+            
+            sql = "INSERT INTO usuarios (NombreUsuario, ContrasenaHash, EsAdmin) VALUES (%s, %s, %s)"
+            cursor.execute(sql, (nombre, contrasena_hash, es_admin_int))
+            db.commit()
+            return True
+        except mysql.connector.Error as err:
+            if err.errno == 1062: 
+                messagebox.showerror("Error de DB", f"El usuario '{nombre}' ya existe.")
+            else:
+                messagebox.showerror("Error de DB", f"Error al crear usuario: {err}")
+            return False
+        finally:
+            cursor.close()
+            db.close()
+    return False
+
+def eliminar_usuario_db(nombre_usuario):
+    """Elimina un usuario de la base de datos por su NombreUsuario."""
+    db = conectar_mysql()
+    if db:
+        cursor = db.cursor()
+        try:
+            
+            sql = "DELETE FROM usuarios WHERE NombreUsuario = %s"
+            cursor.execute(sql, (nombre_usuario,))
+            db.commit()
+            return True
+        except mysql.connector.Error as err:
+            messagebox.showerror("Error de DB", f"Error al eliminar usuario: {err}")
+            return False
+        finally:
+            cursor.close()
+            db.close()
+    return False
+
+def actualizar_lista_usuarios():
+    """Actualiza la lista de usuarios en el Listbox de la ventana de gestión."""
+    global lista_usuarios_widget
+    if lista_usuarios_widget: 
+        lista_usuarios_widget.delete(0, tk.END)
+        usuarios_data = obtener_usuarios_db()
+        for nombre, es_admin_val in usuarios_data:
+            rol_display = "Administrador" if es_admin_val == 1 else "Operador"
+            lista_usuarios_widget.insert(tk.END, f"{nombre} ({rol_display})")
+
+def gestionar_usuarios(ventana_config):
+    """
+    Gestiona la creación, eliminación y visualización de usuarios desde la base de datos.
+    Requiere la clave maestra de administrador para acciones críticas.
+    """
+    ventana_usuarios = tk.Toplevel(ventana_config)
+    ventana_usuarios.title("Gestión de Usuarios")
+    ventana_usuarios.configure(bg="#A9A9A9")
+
+    
+    label_usuarios = ttk.Label(ventana_usuarios, text="Usuarios:", style="CustomLabel.TLabel")
+    label_usuarios.pack(pady=5, padx=10)
+
+    global lista_usuarios_widget
+    lista_usuarios_widget = tk.Listbox(ventana_usuarios, bg="#ffffff", fg="#000000")
+    actualizar_lista_usuarios()
+    lista_usuarios_widget.pack(padx=10, pady=5, fill="both", expand=True)
+
+    frame_crear_usuario = ttk.Frame(ventana_usuarios, style="TFrame")
+    frame_crear_usuario.pack(pady=5, padx=10, fill="x")
+    frame_crear_usuario.columnconfigure(1, weight=1)
+
+    label_nombre = ttk.Label(frame_crear_usuario, text="Nombre:", style="CustomLabel.TLabel")
+    label_nombre.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+    entry_nombre = ttk.Entry(frame_crear_usuario, style="CustomEntry.TEntry")
+    entry_nombre.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
+
+    label_contrasena = ttk.Label(frame_crear_usuario, text="Contraseña:", style="CustomLabel.TLabel")
+    label_contrasena.grid(row=1, column=0, sticky="w", padx=5, pady=5)
+    entry_contrasena = ttk.Entry(frame_crear_usuario, show="*", style="CustomEntry.TEntry")
+    entry_contrasena.grid(row=1, column=1, sticky="ew", padx=5, pady=5)
+    
+    es_admin_var = tk.BooleanVar(value=False) 
+    check_es_admin = ttk.Checkbutton(frame_crear_usuario, text="Otorgar Privilegios de Administrador", variable=es_admin_var, style="TCheckbutton")
+    check_es_admin.grid(row=2, column=0, columnspan=2, sticky="w", padx=5, pady=5)
+
+    def verificar_codigo_administrador(codigo):
+        
+        return hashlib.sha256(codigo.encode()).hexdigest() == clave_admin
+
+    def crear_usuario():
+        nombre = entry_nombre.get().strip()
+        contrasena = entry_contrasena.get().strip()
+        es_admin_val = 1 if es_admin_var.get() else 0 
+        
+        if not nombre or not contrasena:
+            messagebox.showerror("Error", "Ingrese nombre y contraseña para el nuevo usuario.", parent=ventana_usuarios)
+            return
+
+        if es_admin_val == 1:
+            codigo_admin = simpledialog.askstring("Código de Administrador", "Ingrese el código de administrador para otorgar privilegios:", show='*', parent=ventana_usuarios)
+            if not (codigo_admin and verificar_codigo_administrador(codigo_admin)):
+                messagebox.showerror("Error", "Código de administrador incorrecto. No se puede crear un usuario administrador sin la clave maestra.", parent=ventana_usuarios)
+                return
+        
+        contrasena_hash = hashlib.sha256(contrasena.encode()).hexdigest()
+        if insertar_usuario_db(nombre, contrasena_hash, es_admin_val):
+            actualizar_lista_usuarios() 
+            rol_msg = "Administrador" if es_admin_val == 1 else "Operador"
+            messagebox.showinfo("Usuario Creado", f"Usuario '{nombre}' con rol '{rol_msg}' creado.", parent=ventana_usuarios)
+            entry_nombre.delete(0, tk.END)
+            entry_contrasena.delete(0, tk.END)
+            es_admin_var.set(False) 
+
+    btn_crear_usuario = ttk.Button(ventana_usuarios, text="Crear Usuario", command=crear_usuario)
+    btn_crear_usuario.pack(pady=5, padx=10, fill="x")
+
+    def eliminar_usuario():
+        seleccion = lista_usuarios_widget.curselection()
+        if not seleccion:
+            messagebox.showerror("Error", "Seleccione un usuario para eliminar.", parent=ventana_usuarios)
+            return
+
+        usuario_display_text = lista_usuarios_widget.get(seleccion[0])
+        usuario_a_eliminar = usuario_display_text.split(' ')[0] 
+        
+        if usuario_a_eliminar == "admin": 
+            messagebox.showerror("Error", "No se puede eliminar el usuario administrador principal.", parent=ventana_usuarios)
+            return
+
+        codigo_admin = simpledialog.askstring("Código de Administrador", "Ingrese el código de administrador para eliminar:", show='*', parent=ventana_usuarios)
+        if codigo_admin and verificar_codigo_administrador(codigo_admin):
+            if messagebox.askyesno("Confirmar Eliminación", f"¿Está seguro de que desea eliminar el usuario '{usuario_a_eliminar}'?", parent=ventana_usuarios):
+                if eliminar_usuario_db(usuario_a_eliminar):
+                    actualizar_lista_usuarios()
+                    messagebox.showinfo("Usuario Eliminado", f"Usuario '{usuario_a_eliminar}' eliminado.", parent=ventana_usuarios)
+        else:
+            messagebox.showerror("Error", "Código de administrador incorrecto o cancelación.", parent=ventana_usuarios)
+
+    btn_eliminar_usuario = ttk.Button(ventana_usuarios, text="Eliminar Usuario", command=eliminar_usuario)
+    btn_eliminar_usuario.pack(pady=5, padx=10, fill="x")
+
+    
+    ventana_usuarios.transient(ventana_config) 
+    ventana_usuarios.grab_set()
+    ventana_usuarios.wait_window(ventana_usuarios)
+
 def configuracion():
     """Abre una ventana de configuración para ajustar notificaciones y tema de color."""
     ventana_config = tk.Toplevel(ventana)
     ventana_config.title("Configuración")
-    ventana_config.configure(bg="#A9A9A9")  # Fondo gris oscuro medio
+    ventana_config.configure(bg="#A9A9A9") 
 
     style = ttk.Style(ventana_config)
     style.theme_use('clam')
@@ -2910,186 +3201,53 @@ def configuracion():
     style.configure("TCombobox", foreground="#000000", background="#ffffff", font=("Segoe UI", 10))
     style.configure("TCheckbutton", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10))
     style.configure("TButton", font=("Segoe UI", 10))
-    style.configure("TFrame", background="#A9A9A9") # Estilo para los frames
+    style.configure("TFrame", background="#A9A9A9") 
 
 
     main_frame = ttk.Frame(ventana_config, style="TFrame")
     main_frame.pack(padx=20, pady=20, fill="both", expand=True)
     main_frame.grid_columnconfigure(0, weight=1)
 
+    
     config_frame = ttk.Frame(main_frame, style="TFrame")
     config_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
     config_frame.columnconfigure(0, weight=1)
     config_frame.columnconfigure(1, weight=1)
 
     
-
     backup_restore_frame = ttk.Frame(main_frame, style="TFrame")
     backup_restore_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=10)
     backup_restore_frame.columnconfigure(0, weight=1)
     backup_restore_frame.columnconfigure(1, weight=1)
 
-    def realizar_copia_seguridad():
-        try:
-            fecha_hora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            nombre_copia_seguridad = f"inventario_backup_{fecha_hora}.json"
-            shutil.copy2("inventario.json", nombre_copia_seguridad)
-            messagebox.showinfo("Copia de Seguridad", f"Copia de seguridad creada: {nombre_copia_seguridad}", parent=ventana_config)
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al crear la copia de seguridad: {e}", parent=ventana_config)
-
-    btn_copia_seguridad = ttk.Button(backup_restore_frame, text="Copia de Seguridad", command=realizar_copia_seguridad)
+   
+    btn_copia_seguridad = ttk.Button(backup_restore_frame, text="Copia de Seguridad", command=lambda: realizar_copia_seguridad(ventana_config))
     btn_copia_seguridad.grid(row=0, column=0, pady=5, padx=5, sticky="ew")
 
-    def restaurar_copia_seguridad():
-        try:
-            archivos_copia_seguridad = [f for f in os.listdir() if f.startswith("inventario_backup_")]
-            if not archivos_copia_seguridad:
-                messagebox.showerror("Error", "No se encontraron copias de seguridad.", parent=ventana_config)
-                return
-
-            ventana_restaurar = tk.Toplevel(ventana_config)
-            ventana_restaurar.title("Restaurar Copia de Seguridad")
-            ventana_restaurar.configure(bg="#A9A9A9")
-
-            label_seleccionar = ttk.Label(ventana_restaurar, text="Seleccione la copia de seguridad a restaurar:", style="CustomLabel.TLabel")
-            label_seleccionar.pack(pady=5, padx=10)
-
-            lista_copias_seguridad = tk.Listbox(ventana_restaurar, bg="#ffffff", fg="#000000")
-            for archivo in archivos_copia_seguridad:
-                lista_copias_seguridad.insert(tk.END, archivo)
-            lista_copias_seguridad.pack(padx=10, pady=5, fill="both", expand=True)
-
-            botones_restaurar_eliminar_frame = ttk.Frame(ventana_restaurar, style="TFrame")
-            botones_restaurar_eliminar_frame.pack(pady=5, padx=10)
-            botones_restaurar_eliminar_frame.columnconfigure(0, weight=1)
-            botones_restaurar_eliminar_frame.columnconfigure(1, weight=1)
-
-            def restaurar_seleccionada():
-                seleccion = lista_copias_seguridad.curselection()
-                if seleccion:
-                    archivo_seleccionado = lista_copias_seguridad.get(seleccion[0])
-                    shutil.copy2(archivo_seleccionado, "inventario.json")
-                    messagebox.showinfo("Restaurar", f"Datos restaurados desde: {archivo_seleccionado}", parent=ventana_restaurar)
-                    ventana_restaurar.destroy()
-                else:
-                    messagebox.showerror("Error", "Seleccione una copia de seguridad.", parent=ventana_restaurar)
-
-            btn_restaurar_seleccionada = ttk.Button(botones_restaurar_eliminar_frame, text="Restaurar", command=restaurar_seleccionada)
-            btn_restaurar_seleccionada.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-
-            def eliminar_seleccionada():
-                seleccion = lista_copias_seguridad.curselection()
-                if seleccion:
-                    archivo_seleccionado = lista_copias_seguridad.get(seleccion[0])
-                    os.remove(archivo_seleccionado)
-                    lista_copias_seguridad.delete(seleccion[0])
-                    messagebox.showinfo("Eliminar", f"Copia de seguridad '{archivo_seleccionado}' eliminada.", parent=ventana_restaurar)
-                else:
-                    messagebox.showerror("Error", "Seleccione una copia de seguridad.", parent=ventana_restaurar)
-
-            btn_eliminar_seleccionada = ttk.Button(botones_restaurar_eliminar_frame, text="Eliminar", command=eliminar_seleccionada)
-            btn_eliminar_seleccionada.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al restaurar la copia de seguridad: {e}", parent=ventana_config)
-
-    btn_restaurar = ttk.Button(backup_restore_frame, text="Restaurar", command=restaurar_copia_seguridad)
+    btn_restaurar = ttk.Button(backup_restore_frame, text="Restaurar", command=lambda: restaurar_copia_seguridad(ventana_config))
     btn_restaurar.grid(row=0, column=1, pady=5, padx=5, sticky="ew")
 
-    def gestionar_usuarios():
-        ventana_usuarios = tk.Toplevel(ventana_config)
-        ventana_usuarios.title("Gestión de Usuarios")
-        ventana_usuarios.configure(bg="#A9A9A9")
-
-        label_usuarios = ttk.Label(ventana_usuarios, text="Usuarios:", style="CustomLabel.TLabel")
-        label_usuarios.pack(pady=5, padx=10)
-
-        global lista_usuarios_widget
-        lista_usuarios_widget = tk.Listbox(ventana_usuarios, bg="#ffffff", fg="#000000")
-        actualizar_lista_usuarios()
-        lista_usuarios_widget.pack(padx=10, pady=5, fill="both", expand=True)
-
-        frame_crear_usuario = ttk.Frame(ventana_usuarios, style="TFrame")
-        frame_crear_usuario.pack(pady=5, padx=10, fill="x")
-        frame_crear_usuario.columnconfigure(1, weight=1)
-
-        label_nombre = ttk.Label(frame_crear_usuario, text="Nombre:", style="CustomLabel.TLabel")
-        label_nombre.grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        entry_nombre = ttk.Entry(frame_crear_usuario, style="CustomEntry.TEntry")
-        entry_nombre.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
-
-        label_contrasena = ttk.Label(frame_crear_usuario, text="Contraseña:", style="CustomLabel.TLabel")
-        label_contrasena.grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        entry_contrasena = ttk.Entry(frame_crear_usuario, show="*", style="CustomEntry.TEntry")
-        entry_contrasena.grid(row=1, column=1, sticky="ew", padx=5, pady=5)
-
-        def verificar_codigo_administrador(codigo):
-            return hashlib.sha256(codigo.encode()).hexdigest() == clave_admin
-
-        def crear_usuario():
-            nombre = entry_nombre.get()
-            contrasena = entry_contrasena.get()
-            codigo_admin = simpledialog.askstring("Código de Administrador", "Ingrese el código de administrador:", parent=ventana_usuarios)
-            if codigo_admin and verificar_codigo_administrador(codigo_admin):
-                if nombre and contrasena:
-                    usuarios[nombre] = hashlib.sha256(contrasena.encode()).hexdigest()
-                    
-                    actualizar_lista_usuarios()
-                    messagebox.showinfo("Usuario Creado", f"Usuario '{nombre}' creado.", parent=ventana_usuarios)
-                    entry_nombre.delete(0, tk.END)
-                    entry_contrasena.delete(0, tk.END)
-                    guardar_datos() 
-                else:
-                    messagebox.showerror("Error", "Ingrese nombre y contraseña.", parent=ventana_usuarios)
-            else:
-                messagebox.showerror("Error", "Código de administrador incorrecto.", parent=ventana_usuarios)
-
-        btn_crear_usuario = ttk.Button(ventana_usuarios, text="Crear Usuario", command=crear_usuario)
-        btn_crear_usuario.pack(pady=5, padx=10, fill="x")
-
-        def eliminar_usuario():
-            seleccion = lista_usuarios_widget.curselection()
-            if seleccion:
-                usuario_seleccionado = lista_usuarios_widget.get(seleccion[0])
-                if usuario_seleccionado == "admin":
-                    messagebox.showerror("Error", "No se puede eliminar el usuario administrador.", parent=ventana_usuarios)
-                    return
-                del usuarios[usuario_seleccionado]
-                actualizar_lista_usuarios()
-                messagebox.showinfo("Usuario Eliminado", f"Usuario '{usuario_seleccionado}' eliminado.", parent=ventana_usuarios)
-                guardar_datos() # Guardar después de eliminar un usuario
-            else:
-                messagebox.showerror("Error", "Seleccione un usuario.", parent=ventana_usuarios)
-
-        btn_eliminar_usuario = ttk.Button(ventana_usuarios, text="Eliminar Usuario", command=eliminar_usuario)
-        btn_eliminar_usuario.pack(pady=5, padx=10, fill="x")
-
-    btn_gestion_usuarios = ttk.Button(main_frame, text="Gestión de Usuarios", command=gestionar_usuarios)
-    btn_gestion_usuarios.grid(row=2, column=0, sticky="ew", padx=10, pady=10)
+    
+    btn_gestion_usuarios = ttk.Button(main_frame, text="Gestión de Usuarios", command=lambda: gestionar_usuarios(ventana_config))
+    btn_gestion_usuarios.grid(row=2, column=0, sticky="ew", padx=10, pady=10) 
 
     def guardar_configuracion():
-      
         
         ventana_config.destroy()
-       
 
+   
     btn_aceptar = ttk.Button(main_frame, text="Aceptar", command=guardar_configuracion)
-    btn_aceptar.grid(row=3, column=0, sticky="ew", padx=10, pady=10)
+    btn_aceptar.grid(row=3, column=0, sticky="ew", padx=10, pady=10) # row=3
 
-def actualizar_lista_usuarios():
-    """Actualiza la lista de usuarios en la ventana de gestión de usuarios."""
-    if 'lista_usuarios_widget' in globals():
-        lista_usuarios_widget.delete(0, tk.END)
-        for usuario in usuarios:
-            lista_usuarios_widget.insert(tk.END, usuario)
-
-
+    
+    ventana_config.transient(ventana)
+    ventana_config.grab_set()
+    ventana_config.wait_window(ventana_config)
 
 def mostrar_notificacion_bajo_stock():
     """Muestra una notificación de advertencia general sobre bajo stock."""
-    global ventana  # Hacer la variable 'ventana' global
-    umbral_stock_minimo = 1  # Ajusta este valor según tus necesidades
+    global ventana  
+    umbral_stock_minimo = 1  
     productos_bajo_stock = []
     for producto, datos in inventario.items():
         if datos["stock"] < umbral_stock_minimo:
