@@ -49,6 +49,7 @@ current_user_role_is_admin = False
 
 
 
+
 def guardar_datos():
     """Guarda los datos en un archivo JSON."""
     global datos_consumo_para_guardar, datos_reportes_para_guardar, usuarios, entradas_departamentos 
@@ -2022,29 +2023,25 @@ def generar_reporte_salidas():
         Muestra el menú contextual de clic derecho solo si el usuario es administrador
         para el reporte de salidas.
         """
-        global current_user_role_is_admin # <--- Declaración de variable global
+        global current_user_role_is_admin 
 
-        if current_user_role_is_admin: # <--- Condición para administradores
+        if current_user_role_is_admin: 
             item = tree.identify_row(event.y)
             if item:
                 tree.selection_set(item)
                 menu_contextual.post(event.x_root, event.y_root)
         else:
-            # Mensaje para operadores que intenten hacer clic derecho
+           
             messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial de salidas.")
 
-    # Esta línea debe estar dentro de la función que genera el reporte de salidas,
-    # después de que 'tree' y 'menu_contextual' hayan sido inicializados.
+    
     tree.bind("<Button-3>", mostrar_menu_contextual)
 
-    # El resto de tu código para configurar la ventana de reporte de salidas:
+   
     ventana_reporte_salidas.grid_columnconfigure(0, weight=1)
     ventana_reporte_salidas.grid_rowconfigure(0, weight=1)
 
-    # Estas líneas que parecen globales, si lo son, deberían estar en el ámbito global o
-    # dentro de una función principal que las inicialice una vez.
-    ventana_reporte_salidas_espera = None
-    tabla_salidas_espera = None
+tabla_salidas_espera = None
 
 
 def actualizar_tabla_salidas_espera():
@@ -2374,13 +2371,25 @@ def generar_reporte_salidas_espera():
 
    
     def mostrar_menu_contextual(event):
-        item = tabla_salidas_espera.identify_row(event.y)
-        if item:
-            tabla_salidas_espera.selection_set(item)
-            menu_contextual.post(event.x_root, event.y_root)
+        """
+        Muestra el menú contextual de clic derecho solo si el usuario es administrador
+        para el reporte de salidas en espera.
+        """
+        global current_user_role_is_admin 
 
+        if current_user_role_is_admin: 
+            item = tabla_salidas_espera.identify_row(event.y)
+            if item:
+                tabla_salidas_espera.selection_set(item)
+                menu_contextual.post(event.x_root, event.y_root)
+        else:
+           
+            messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial de salidas en espera.")
+
+   
     tabla_salidas_espera.bind("<Button-3>", mostrar_menu_contextual)
 
+    
     ventana_reporte_salidas_espera.grid_columnconfigure(0, weight=1)
     ventana_reporte_salidas_espera.grid_rowconfigure(0, weight=1)
 
