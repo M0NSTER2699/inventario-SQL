@@ -27,10 +27,9 @@ import mysql.connector
 def conectar_mysql():
     try:
         mydb = mysql.connector.connect(
-            host="127.0.0.1",       # Reemplaza con tu host de MySQL
-            user="root",     # Reemplaza con tu usuario de MySQL
-            password="", # Reemplaza con tu contraseña de MySQL
-            database="sistema inventario corpoandes" # Reemplaza con el nombre de tu base de datos
+            host="127.0.0.1",       
+            user="root",     
+            database="sistema inventario corpoandes" 
         )
         return mydb
     except mysql.connector.Error as err:
@@ -52,9 +51,8 @@ current_user_role_is_admin = False
 
 def guardar_datos():
     """Guarda los datos en un archivo JSON."""
-    global datos_consumo_para_guardar, datos_reportes_para_guardar, usuarios, entradas_departamentos # Asegúrate de incluir entradas_departamentos
+    global datos_consumo_para_guardar, datos_reportes_para_guardar, usuarios, entradas_departamentos 
 
-    # Actualiza datos_reportes_para_guardar["Entradas"] antes de guardar
     datos_reportes_para_guardar["Entradas"] = [
         {
             "Código": entrada.get("Código", "N/A"),
@@ -65,7 +63,7 @@ def guardar_datos():
         }
         for entrada in entradas_departamentos
     ]
-    # Actualiza datos_reportes_para_guardar["Salidas en Espera"]
+   
     datos_reportes_para_guardar["Salidas en Espera"] = [
         {
             "código": salida.get("código", "N/A"),  
@@ -138,7 +136,7 @@ def cargar_datos():
                 nuevas_salidas_espera.append(salida)
             salidas_espera = nuevas_salidas_espera
 
-            # Insertar datos en MySQL al cargar (solo la primera vez o cuando sea necesario)
+           
             insertar_inventario_mysql(inventario)
 
     except FileNotFoundError:
@@ -181,9 +179,9 @@ def cargar_datos():
     finally:
         if not archivo_existe or not usuarios:
             usuarios["admin"] = hashlib.sha256("admin".encode()).hexdigest()
-            guardar_datos() # Asegúrate de que esta función también se adapte a MySQL eventualmente
+            guardar_datos() 
     
-# Insertar usuarios iniciales en MySQL
+
     insertar_usuarios_mysql(usuarios)
 
 def insertar_usuarios_mysql(usuarios_dict):
@@ -197,7 +195,7 @@ def insertar_usuarios_mysql(usuarios_dict):
 
     for nombre_usuario, contrasena_hash in usuarios_dict.items():
         cursor.execute(sql_check, (nombre_usuario,))
-        if cursor.fetchone() is None:  # Si no existe un usuario con este nombre
+        if cursor.fetchone() is None:  
             es_admin = 1 if nombre_usuario == "admin" else 0
             val = (nombre_usuario, contrasena_hash, es_admin)
             try:
@@ -221,7 +219,7 @@ def insertar_inventario_mysql(inventario):
 
     for codigo, datos_producto in inventario.items():
         cursor.execute(sql_check, (codigo,))
-        if cursor.fetchone() is None:  # Si no existe un producto con este código
+        if cursor.fetchone() is None:    
             val = (
                 codigo,
                 datos_producto.get('nombre'),
@@ -244,20 +242,32 @@ def insertar_inventario_mysql(inventario):
         
 
 def verificar_clave(ventana_clave, entry_clave, ventana_login):
-    clave_ingresada = hashlib.sha256(entry_clave.get().encode()).hexdigest()
-    if clave_ingresada == clave_admin:
+    """
+    Verifica la clave maestra de administrador para el acceso adicional.
+    Esta función solo se llama si el usuario ya es administrador en la DB y marcó la casilla.
+    """
+    global current_user_role_is_admin 
+
+    clave_ingresada_hash = hashlib.sha256(entry_clave.get().encode()).hexdigest()
+    
+    if clave_ingresada_hash == clave_admin: 
         messagebox.showinfo("Acceso Permitido", "Acceso de administrador concedido.")
         ventana_clave.destroy()
         ventana_login.destroy()
-        mostrar_menu()
+        current_user_role_is_admin = True 
+        mostrar_menu() 
     else:
-        messagebox.showerror("Acceso Denegado", "Clave incorrecta.")
+        messagebox.showerror("Acceso Denegado", "Clave de administrador incorrecta.")
+        current_user_role_is_admin = False 
 
 def iniciar_sesion():
-    """Permite al usuario iniciar sesión."""
-    global ventana_login,usuarios
+    """Permite al usuario iniciar sesión y establece los privilegios."""
+    global ventana_login, current_user_role_is_admin
 
-    ventana_login = tk.Tk() # Creación de la ventana principal de login
+    
+    current_user_role_is_admin = False 
+
+    ventana_login = tk.Tk()
     ventana_login.title("Login")
     ventana_login.configure(bg="#263238")
 
@@ -275,6 +285,7 @@ def iniciar_sesion():
     frame_logo.pack(side="left", padx=20, pady=20, fill="both", expand=True)
 
     try:
+       
         imagen_logo = Image.open("C:/Users/monster/Desktop/src/server/routes/imagenes/logo.png")
         imagen_logo = imagen_logo.resize((300, 300))
         logo = ImageTk.PhotoImage(imagen_logo)
@@ -282,7 +293,10 @@ def iniciar_sesion():
         label_logo.image = logo
         label_logo.pack(fill="both", expand=True)
     except FileNotFoundError:
-        messagebox.showerror("Error", "No se encontró el archivo del logo.")
+        messagebox.showerror("Error", "No se encontró el archivo del logo. Asegúrate de que 'logo.png' esté en la ruta correcta.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al cargar la imagen del logo: {e}")
+
 
     frame_campos = tk.Frame(frame_contenido, bg="#263238")
     frame_campos.pack(side="right", padx=20, pady=20, fill="both", expand=True)
@@ -305,10 +319,12 @@ def iniciar_sesion():
     check_admin.grid(row=2, column=0, columnspan=2, pady=5, sticky="w")
 
     def iniciar():
+        global current_user_role_is_admin 
+
         nombre_usuario = entry_nombre.get()
         contrasena = entry_contrasena.get()
         contrasena_hash_ingresada = hashlib.sha256(contrasena.encode()).hexdigest()
-        es_admin_seleccionado = var_admin.get()
+        es_admin_seleccionado = var_admin.get() 
 
         mydb = conectar_mysql()
         if mydb is None:
@@ -323,9 +339,10 @@ def iniciar_sesion():
 
             if resultado:
                 contrasena_hash_db, es_admin_db = resultado
+                es_admin_db_bool = bool(es_admin_db) 
 
                 if contrasena_hash_ingresada == contrasena_hash_db:
-                    if es_admin_seleccionado and es_admin_db:
+                    if es_admin_seleccionado and es_admin_db_bool: 
                         ventana_clave = tk.Toplevel(ventana_login)
                         ventana_clave.title("Clave de Administrador")
                         ventana_clave.configure(bg="#263238")
@@ -335,35 +352,51 @@ def iniciar_sesion():
                         style_clave.configure("TLabel", foreground="#eceff1", background="#263238", font=("Arial", 14))
                         style_clave.configure("TEntry", fieldbackground="#f0f0f0", foreground="black", font=("Arial", 14))
                         style_clave.configure("TButton", foreground="#eceff1", background="#008000", font=("Arial", 14, "bold"))
-                        style_clave.configure("TCheckbutton", foreground="#eceff1", background="#263238", font=("Arial", 14))
-
+                        
                         ttk.Label(ventana_clave, text="Clave:", background="#263238", foreground="#eceff1", font=("Arial", 14)).pack(pady=5)
-                        entry_clave_admin_local = ttk.Entry(ventana_clave, show="*", font=("Arial", 14), width=20) # Definir aquí
+                        entry_clave_admin_local = ttk.Entry(ventana_clave, show="*", font=("Arial", 14), width=20)
                         entry_clave_admin_local.pack(pady=5)
 
-                        ttk.Button(ventana_clave, text="Verificar", command=lambda: verificar_clave(ventana_clave, entry_clave_admin_local, ventana_login), style="TButton").pack(pady=10) # Pasar la referencia local
-                    elif not es_admin_seleccionado and not es_admin_db:
+                       
+                        ttk.Button(ventana_clave, text="Verificar", command=lambda: verificar_clave(ventana_clave, entry_clave_admin_local, ventana_login), style="TButton").pack(pady=10)
+                        
+                       
+                        ventana_login.wait_window(ventana_clave) 
+                     
+
+                    elif not es_admin_seleccionado and not es_admin_db_bool: 
+                        current_user_role_is_admin = False # 
+                        messagebox.showinfo("Acceso Permitido", "Acceso de operador concedido.")
                         ventana_login.destroy()
-                        mostrar_menu()
-                    elif es_admin_seleccionado and not es_admin_db:
+                        mostrar_menu() 
+                    elif es_admin_seleccionado and not es_admin_db_bool: 
                         messagebox.showerror("Error", "Este usuario no tiene permisos de administrador.")
-                    elif not es_admin_seleccionado and es_admin_db:
+                        current_user_role_is_admin = False 
+
+                    elif not es_admin_seleccionado and es_admin_db_bool: 
                         messagebox.showerror("Error", "Debe marcar la casilla de 'Administrador' para este usuario.")
+                        current_user_role_is_admin = False 
+
                 else:
                     messagebox.showerror("Error", "Contraseña incorrecta.")
+                    current_user_role_is_admin = False
             else:
                 messagebox.showerror("Error", "Usuario no encontrado.")
+                current_user_role_is_admin = False
 
         except mysql.connector.Error as err:
             messagebox.showerror("Error", f"Error al consultar la base de datos: {err}")
+            current_user_role_is_admin = False
+        except Exception as e:
+            messagebox.showerror("Error", f"Ocurrió un error inesperado durante el inicio de sesión: {e}")
+            current_user_role_is_admin = False
         finally:
             if mydb and mydb.is_connected():
                 cursor.close()
                 mydb.close()
 
     ttk.Button(frame_campos, text="Iniciar Sesión", command=iniciar, style="TButton").grid(row=3, column=0, columnspan=2, pady=10, sticky="ew")
-    ventana_login.mainloop() 
-
+    ventana_login.mainloop()
 
 
 def abrir_calendario(ventana_padre, entry_fecha):
@@ -412,7 +445,7 @@ def agregar_producto():
             "PLASTICO": "PLA",
             "MATERIAL DE FERRETERIA": "FER",
             "OTROS": "OTR"
-            # Añade aquí más categorías y sus prefijos según necesites
+            
         }
         prefijo = prefijos_categoria.get(categoria_nombre.upper(), "GEN")
 
@@ -429,7 +462,7 @@ def agregar_producto():
             if resultado_categoria:
                 categoria_id = resultado_categoria[0]
             else:
-                return f"{prefijo}-001" # Si no se encuentra la categoría, genera un código básico
+                return f"{prefijo}-001" 
         except mysql.connector.Error as err:
             messagebox.showerror("Error al obtener CategoriaID", f"Error: {err}")
             return f"{prefijo}-001"
@@ -481,7 +514,7 @@ def agregar_producto():
 
         cursor = mydb.cursor()
 
-        # Obtener CategoriaID (sin cambios)
+       
         query_categoria_id = "SELECT CategoriaID FROM categorias WHERE NombreCategoria = %s"
         categoria_id = None
         try:
@@ -498,7 +531,7 @@ def agregar_producto():
             mydb.close()
             return
 
-        # Fijamos el destino de entrada a "Almacén principal"
+        
         destino_entrada_nombre = "Almacén principal"
 
         sql_producto = """
@@ -560,10 +593,10 @@ def agregar_producto():
                         sql_insertar_categoria = "INSERT INTO categorias (NombreCategoria) VALUES (%s)"
                         cursor.execute(sql_insertar_categoria, (nueva_cat,))
                         mydb.commit()
-                        categorias_list.insert(len(categorias_list) - 1, nueva_cat) # Insertar antes de "Añadir nueva"
+                        categorias_list.insert(len(categorias_list) - 1, nueva_cat) 
                         categorias_var.set(categorias_list)
                         combo_categoria['values'] = categorias_list
-                        categoria_var.set(nueva_cat) # Establecer la nueva categoría como seleccionada
+                        categoria_var.set(nueva_cat) 
                         ventana_nueva_categoria.destroy()
                     except mysql.connector.Error as err:
                         mydb.rollback()
@@ -587,10 +620,10 @@ def agregar_producto():
         def guardar_nueva_unidad():
             nueva_unidad = nueva_unidad_entry.get().strip()
             if nueva_unidad and nueva_unidad not in unidades_list:
-                unidades_list.insert(len(unidades_list) - 1, nueva_unidad) # Insertar antes de "Añadir nueva"
+                unidades_list.insert(len(unidades_list) - 1, nueva_unidad)
                 unidades_medida_var.set(unidades_list)
                 combo_unidad_medida['values'] = unidades_list
-                unidad_medida_var.set(nueva_unidad) # Establecer la nueva unidad como seleccionada
+                unidad_medida_var.set(nueva_unidad)
                 ventana_nueva_unidad.destroy()
             else:
                 messagebox.showerror("Error", "Por favor, ingrese una unidad de medida válida que no exista.")
@@ -616,16 +649,16 @@ def agregar_producto():
     ventana_agregar.title("Agregar Producto")
     ventana_agregar.configure(bg="#000080")
 
-    # Listas predeterminadas
+    
     categorias_predeterminadas = ["COMIDA", "MATERIALES Y ARTICULOS DE OFICINA", "TONNER", "MATERIAL DE LIMPIEZA", "PLASTICO", "MATERIAL DE FERRETERIA", "OTROS", "Añadir nueva"]
     unidades_medida_predeterminadas = ["Unidad", "Litro", "Kilogramo", "Metro", "Caja", "Paquete", "Añadir nueva"]
 
-    # Intentar agregar las categorías predeterminadas al inicio
+    
     for cat in categorias_predeterminadas:
         if cat != "Añadir nueva":
             agregar_categoria_predeterminada_a_db(cat)
 
-    # Variables para los Combobox
+    
     categorias_var = tk.StringVar()
     unidades_medida_var = tk.StringVar()
     categoria_var = tk.StringVar()
@@ -720,10 +753,9 @@ def realizar_salida():
             return seleccion.split(" (")[1][:-1]
         return None
     
-    # NUEVA FUNCIÓN: Obtener IDs de departamentos y sus nombres
     def obtener_departamentos_para_combobox():
-        departamentos_map = {} # {'NombreDepartamento': DepartamentoID}
-        nombres_departamentos = [] # Lista de nombres para el combobox
+        departamentos_map = {}
+        nombres_departamentos = []
         mydb = conectar_mysql()
         if mydb:
             cursor = mydb.cursor()
@@ -738,11 +770,10 @@ def realizar_salida():
                 if mydb.is_connected():
                     cursor.close()
                     mydb.close()
-        return nombres_departamentos, departamentos_map # Devuelve la lista de nombres y el diccionario de mapeo
+        return nombres_departamentos, departamentos_map
 
     def salida_espera():
-        """Agrega una solicitud de salida en espera a la base de datos MySQL."""
-        # Obtener el nombre del departamento seleccionado del Combobox
+        
         departamento_nombre_seleccionado = departamento_var.get() 
         
         seleccion_producto = combo_producto.get()
@@ -771,7 +802,7 @@ def realizar_salida():
         cursor = mydb.cursor()
         
         try:
-            # 1. Obtener el ProductoID basado en el código del producto seleccionado
+           
             query_producto_id = "SELECT ProductoID FROM productos WHERE Codigo = %s"
             cursor.execute(query_producto_id, (codigo_producto,))
             resultado_id = cursor.fetchone()
@@ -782,16 +813,14 @@ def realizar_salida():
             
             producto_id = resultado_id[0]
 
-            # 2. Obtener el DepartamentoID basado en el nombre del departamento seleccionado
-            # Usamos el diccionario 'departamentos_map' que creamos al inicio
+           
             departamento_id = departamentos_map_global.get(departamento_nombre_seleccionado)
             
             if departamento_id is None:
                 messagebox.showerror("Error", f"Departamento '{departamento_nombre_seleccionado}' no válido.")
                 return
 
-            # 3. Insertar en salidas_espera usando DepartamentoID
-            # También agregamos FechaSolicitud y Estado (Pendiente) si aún no los tienes
+          
             sql_insert_salida = """
                 INSERT INTO salidas_espera (ProductoID, CodigoProducto, Cantidad, DepartamentoID, FechaSolicitud, Estado)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -804,9 +833,7 @@ def realizar_salida():
             messagebox.showinfo("Salida en Espera", f"{cantidad} unidades de '{producto_nombre}' (código: {codigo_producto}) solicitadas para {departamento_nombre_seleccionado}. Agregado a la lista de espera.")
             ventana_salida_espera.destroy()
             
-            # Si tienes una función para actualizar la tabla de salidas en espera en la ventana principal, llámala aquí:
-            # if 'actualizar_tabla_salidas_espera' in globals() and callable(actualizar_tabla_salidas_espera):
-            #     actualizar_tabla_salidas_espera() # Esto es crucial para que se vea el cambio inmediatamente
+         
 
         except mysql.connector.Error as err:
             mydb.rollback()
@@ -816,12 +843,12 @@ def realizar_salida():
                 cursor.close()
                 mydb.close()
 
-    # --- Configuración de la ventana de Salida en Espera ---
+
     ventana_salida_espera = tk.Toplevel(ventana)
     ventana_salida_espera.title("Salida en Espera")
     ventana_salida_espera.configure(bg="#000080")
 
-    # --- Estilos ttk Personalizados ---
+    
     style = ttk.Style(ventana_salida_espera)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#000080", font=("Segoe UI", 10, "bold"))
@@ -830,14 +857,14 @@ def realizar_salida():
     style.configure("CustomButton.TButton", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"), padding=8, relief="raised", anchor="center")
     style.map("CustomButton.TButton", background=[('active', '#c1c1c1')], foreground=[('active', '#000000')])
 
-    # Obtener la lista de productos con su código para el Combobox
+    
     productos_con_codigo = obtener_productos_con_codigo()
 
     ttk.Label(ventana_salida_espera, text="Nombre del producto (Código):", style="CustomLabel.TLabel").grid(row=0, column=0, sticky="w", padx=10, pady=10)
     combo_producto = ttk.Combobox(ventana_salida_espera, values=productos_con_codigo, style="TCombobox")
     combo_producto.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
-    # Función para filtrar la lista de productos por nombre o código
+    
     def filtrar_productos(event):
         valor_escrito = combo_producto.get().lower()
         productos_filtrados = [
@@ -847,24 +874,24 @@ def realizar_salida():
         ]
         combo_producto["values"] = productos_filtrados
 
-    # Enlazar el evento de escritura al Combobox
+    
     combo_producto.bind("<KeyRelease>", filtrar_productos)
 
     ttk.Label(ventana_salida_espera, text="Cantidad de salida:", style="CustomLabel.TLabel").grid(row=1, column=0, sticky="w", padx=10, pady=10)
     entry_cantidad = ttk.Entry(ventana_salida_espera, style="CustomEntry.TEntry")
     entry_cantidad.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
 
-    # Menú desplegable para seleccionar el departamento (ahora obtenido de la BD)
+    
     ttk.Label(ventana_salida_espera, text="Departamento:", style="CustomLabel.TLabel").grid(row=2, column=0, sticky="w", padx=10, pady=10)
     
-    # Obtener departamentos desde la base de datos y mapear nombres a IDs
+    
     nombres_departamentos_para_combobox, departamentos_map_global = obtener_departamentos_para_combobox() # Asigna a una variable global o pásala
     
     departamento_var = tk.StringVar(ventana_salida_espera)
     if nombres_departamentos_para_combobox:
-        departamento_var.set(nombres_departamentos_para_combobox[0])  # Valor predeterminado
+        departamento_var.set(nombres_departamentos_para_combobox[0])  
     else:
-        departamento_var.set("No hay departamentos") # Manejar caso sin departamentos
+        departamento_var.set("No hay departamentos") 
         messagebox.showwarning("Advertencia", "No se encontraron departamentos en la base de datos.")
 
     ttk.Combobox(ventana_salida_espera, textvariable=departamento_var, values=nombres_departamentos_para_combobox, style="TCombobox", state="readonly").grid(row=2, column=1, padx=10, pady=10, sticky="ew")
@@ -885,7 +912,7 @@ def mostrar_inventario(ventana):
     ventana_inventario.geometry("1200x600")
     ventana_inventario.configure(bg="#A9A9A9")
 
-    # --- Estilos ttk Personalizados ---
+   
     style = ttk.Style(ventana_inventario)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -897,11 +924,11 @@ def mostrar_inventario(ventana):
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
 
-    # Frame para los menús desplegables, totales y búsqueda
+    
     frame_menu = tk.Frame(ventana_inventario, bg="#A9A9A9")
     frame_menu.pack(pady=10, padx=10, fill=tk.X)
 
-    # Frame para la búsqueda por texto
+   
     frame_busqueda = tk.Frame(frame_menu, bg="#A9A9A9")
     frame_busqueda.pack(side=tk.LEFT, padx=10)
 
@@ -909,7 +936,7 @@ def mostrar_inventario(ventana):
     entry_busqueda = ttk.Entry(frame_busqueda, style="CustomEntry.TEntry")
     entry_busqueda.pack(side=tk.LEFT)
 
-    # Menú desplegable de categorías para mostrar
+  
     categorias_mostrar = ["Todas"]
     mydb = conectar_mysql()
     if mydb:
@@ -925,15 +952,15 @@ def mostrar_inventario(ventana):
     menu_categorias_mostrar = ttk.Combobox(frame_menu, textvariable=categoria_seleccionada_mostrar, values=categorias_mostrar, style="TCombobox")
     menu_categorias_mostrar.pack(side=tk.LEFT, padx=10)
 
-    # Frame para la tabla de inventario
+   
     frame_tabla = tk.Frame(ventana_inventario, bg="#A9A9A9")
     frame_tabla.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    # Treeview (tabla)
+    
     tabla_productos = ttk.Treeview(frame_tabla, columns=("Código", "Categoría", "Producto", "Destino Entrada", "Destino Salida", "Entrada", "Salida", "Stock", "Unidad Medida", "Fecha Entrada", "Fecha Salida"), show="headings", style="Grid.Treeview")
     tabla_productos.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    # Definir encabezados de columna
+    
     tabla_productos.heading("Código", text="Código", anchor=tk.W)
     tabla_productos.heading("Categoría", text="Categoría", anchor=tk.W)
     tabla_productos.heading("Producto", text="Producto", anchor=tk.W)
@@ -946,7 +973,7 @@ def mostrar_inventario(ventana):
     tabla_productos.heading("Fecha Entrada", text="Fecha Entrada", anchor=tk.W)
     tabla_productos.heading("Fecha Salida", text="Fecha Salida", anchor=tk.W)
 
-    # Configurar ancho de columnas
+    
     tabla_productos.column("Código", width=150)
     tabla_productos.column("Categoría", width=120)
     tabla_productos.column("Producto", width=150)
@@ -959,12 +986,11 @@ def mostrar_inventario(ventana):
     tabla_productos.column("Fecha Entrada", width=100)
     tabla_productos.column("Fecha Salida", width=100)
 
-    # Agregar barra de desplazamiento vertical
+    
     barra_desplazamiento = ttk.Scrollbar(frame_tabla, orient=tk.VERTICAL, command=tabla_productos.yview)
     tabla_productos.configure(yscrollcommand=barra_desplazamiento.set)
     barra_desplazamiento.pack(side=tk.RIGHT, fill=tk.Y)
 
-    # Frame para los totales
     frame_totales = tk.Frame(ventana_inventario, bg="#A9A9A9")
     frame_totales.pack(pady=10, padx=10, fill=tk.X)
 
@@ -1065,13 +1091,13 @@ def mostrar_inventario(ventana):
                 cursor.close()
                 mydb.close()
 
-    # Función para mostrar el inventario según la categoría seleccionada y el término de búsqueda
+    
     def mostrar_inventario_filtrado(event=None):
         categoria_nombre = categoria_seleccionada_mostrar.get()
         termino_busqueda = entry_busqueda.get().lower()
         mostrar_tabla(categoria_nombre, termino_busqueda)
 
-    # Enlazar el evento de selección de categoría y el evento de escritura en la búsqueda
+    
     menu_categorias_mostrar.bind("<<ComboboxSelected>>", mostrar_inventario_filtrado)
     entry_busqueda.bind("<KeyRelease>", mostrar_inventario_filtrado)
 
@@ -1097,12 +1123,12 @@ def mostrar_inventario(ventana):
             cursor = mydb.cursor()
 
             try:
-                # Actualizar el stock en la tabla productos (sin cambios)
+                
                 sql_actualizar_stock = "UPDATE productos SET Stock = Stock + %s, FechaEntrada = %s WHERE Codigo = %s"
                 val_actualizar_stock = (cantidad, fecha, codigo_producto_seleccionado)
                 cursor.execute(sql_actualizar_stock, val_actualizar_stock)
 
-                # Insertar un registro en la tabla entradas, usando "Almacén principal" directamente
+                
                 sql_insertar_entrada = "INSERT INTO entradas (ProductoID, CodigoProducto, Cantidad, FechaEntrada, Destino) SELECT ProductoID, Codigo, %s, %s, 'Almacén principal' FROM productos WHERE Codigo = %s"
                 val_insertar_entrada = (cantidad, fecha, codigo_producto_seleccionado)
                 cursor.execute(sql_insertar_entrada, val_insertar_entrada)
@@ -1189,7 +1215,7 @@ def mostrar_inventario(ventana):
             cursor = mydb.cursor()
 
             try:
-                # Verificar si el departamento de salida existe y obtener su ID (sin cambios)
+                
                 query_departamento_salida_id = "SELECT DepartamentoID FROM departamentos WHERE NombreDepartamento = %s"
                 cursor.execute(query_departamento_salida_id, (departamento_nombre,))
                 resultado_departamento_salida = cursor.fetchone()
@@ -1199,16 +1225,16 @@ def mostrar_inventario(ventana):
                     return
                 departamento_salida_id = resultado_departamento_salida[0]
 
-                # Verificar si hay suficiente stock (sin cambios)
+                
                 cursor.execute("SELECT Stock FROM productos WHERE Codigo = %s", (codigo_producto_seleccionado,))
                 resultado_stock = cursor.fetchone()
                 if resultado_stock and resultado_stock[0] >= cantidad:
-                    # Actualizar el stock y el DepartamentoID (ahora destino de salida) en la tabla productos
+                   
                     sql_actualizar_stock_departamento = "UPDATE productos SET Stock = Stock - %s, FechaSalida = %s, DepartamentoID = %s WHERE Codigo = %s"
                     val_actualizar_stock_departamento = (cantidad, fecha, departamento_salida_id, codigo_producto_seleccionado)
                     cursor.execute(sql_actualizar_stock_departamento, val_actualizar_stock_departamento)
 
-                    # Insertar un registro en la tabla salidas (manteniendo el DepartamentoID para la salida)
+                    
                     sql_insertar_salida = "INSERT INTO salidas (ProductoID, CodigoProducto, Cantidad, FechaSalida, DepartamentoID, NumeroRequisicion) SELECT ProductoID, Codigo, %s, %s, %s, %s FROM productos WHERE Codigo = %s"
                     val_insertar_salida = (cantidad, fecha, departamento_salida_id, numero_requisicion, codigo_producto_seleccionado)
                     cursor.execute(sql_insertar_salida, val_insertar_salida)
@@ -1236,7 +1262,7 @@ def mostrar_inventario(ventana):
         departamentos = ["OTIC", "Oficina de Gestion Administrativa", "Oficina Contabilidad","Oficina Compras","Oficina de Bienes","Direccion de Servicios Generales y Transporte","Oficina de Seguimiento y Proyectos Estructurales","Direccion General de Planificacion Estrategica","Planoteca","Biblioteca","Direccion General de Seguimiento de Proyectos","Gestion Participativa Parque la isla","Oficina de Atencion ciudadana","Oficina de gestion Humana","Presidencia","Secretaria General","Consultoria Juridica","Oficina de Planificacion y Presupuesto","Auditoria","Direccion de informacion y Comunicacion","Direccion General de Formacion"]
         departamentos.sort()
 
-        # Agregar los departamentos a la base de datos si no existen
+        
         for departamento in departamentos:
             agregar_departamento_a_db(departamento)
 
@@ -1288,24 +1314,35 @@ def mostrar_inventario(ventana):
             else:
                 messagebox.showerror("Error", "No se proporcionó el código del producto para eliminar.")
 
-        # Función para manejar el clic derecho en un producto
+     
     def menu_contextual(event):
+        
+        if current_user_role_is_admin:
             item = tabla_productos.identify_row(event.y)
             if item:
-                codigo_producto = tabla_productos.item(item, "values")[0]  # Obtener el código del producto
-                nombre_producto = tabla_productos.item(item, "values")[2] # Obtener el nombre del producto
+               
+                values = tabla_productos.item(item, "values")
+                codigo_producto = values[0]
+                nombre_producto = values[2] 
+                
                 menu = tk.Menu(ventana_inventario, tearoff=0)
                 menu.add_command(label="Realizar Entrada", command=lambda c=codigo_producto, n=nombre_producto: realizar_entrada_contextual(c, n))
                 menu.add_command(label="Realizar Salida", command=lambda c=codigo_producto, n=nombre_producto: realizar_salida_contextual(c, n))
                 menu.add_command(label="Eliminar Producto", command=lambda c=codigo_producto, n=nombre_producto: eliminar_producto_contextual(c, n))
                 menu.post(event.x_root, event.y_root)
+        else:
+           
+            messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones.")
 
-        # Enlazar el evento de clic derecho al Treeview
+   
     tabla_productos.bind("<Button-3>", menu_contextual)
-    mostrar_tabla() # Llama a mostrar_tabla inicialmente para cargar todos los productos
+    
+    mostrar_tabla() 
 
     ventana_inventario.grid_columnconfigure(0, weight=1)
     ventana_inventario.grid_rowconfigure(1, weight=1)
+
+    
 
 
 def calcular_consumo_departamento():
@@ -1322,7 +1359,7 @@ def mostrar_consumo_periodos(consumo_diario, consumo_semanal, consumo_mensual):
     ventana_consumo.title("Consumo por Período")
     ventana_consumo.configure(bg="#A9A9A9")
 
-    # --- Estilos ttk Personalizados ---
+   
     style = ttk.Style(ventana_consumo)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -1330,11 +1367,11 @@ def mostrar_consumo_periodos(consumo_diario, consumo_semanal, consumo_mensual):
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
 
-    # Treeview (tabla) para mostrar el consumo
+   
     tabla_consumo = ttk.Treeview(ventana_consumo, columns=("Departamento", "Código", "Producto", "Diario", "Semanal", "Mensual", "Unidad Medida", "Porcentaje"), show="headings", style="Grid.Treeview")
     tabla_consumo.pack(fill=tk.BOTH, expand=True)
 
-    # Definir encabezados de columna
+    
     tabla_consumo.heading("Departamento", text="Departamento", anchor=tk.W)
     tabla_consumo.heading("Código", text="Código", anchor=tk.W)
     tabla_consumo.heading("Producto", text="Producto", anchor=tk.W)
@@ -1344,7 +1381,7 @@ def mostrar_consumo_periodos(consumo_diario, consumo_semanal, consumo_mensual):
     tabla_consumo.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
     tabla_consumo.heading("Porcentaje", text="Porcentaje", anchor=tk.W)
 
-    # Configurar ancho de columnas
+   
     tabla_consumo.column("Departamento", width=150)
     tabla_consumo.column("Código", width=100)
     tabla_consumo.column("Producto", width=150)
@@ -1354,10 +1391,10 @@ def mostrar_consumo_periodos(consumo_diario, consumo_semanal, consumo_mensual):
     tabla_consumo.column("Unidad Medida", width=100)
     tabla_consumo.column("Porcentaje", width=100)
 
-    # Lista para almacenar los datos de consumo para guardar
+   
     datos_consumo_guardar = []
 
-    # Obtener todos los departamentos y códigos de productos únicos de los datos de consumo
+   
     departamentos = set()
     codigos_consumidos = set()
     consumo_total_general = 0
@@ -1378,16 +1415,16 @@ def mostrar_consumo_periodos(consumo_diario, consumo_semanal, consumo_mensual):
                 semanal = consumo_semanal[0].get(departamento, {}).get(codigo, 0)
                 mensual = consumo_mensual[0].get(departamento, {}).get(codigo, 0)
 
-                # Obtener nombre y unidad de medida desde la base de datos
+                
                 cursor.execute("SELECT Nombre, UnidadMedida FROM productos WHERE Codigo = %s", (codigo,))
                 producto_info = cursor.fetchone()
                 nombre_producto = producto_info[0] if producto_info else "N/A"
                 unidad_medida = producto_info[1] if producto_info else "N/A"
 
-                # Calcular el consumo total para el producto
+               
                 total_consumo_producto = diario + semanal + mensual
 
-                # Calcular el porcentaje de consumo del producto respecto al total general
+                
                 porcentaje = (total_consumo_producto / consumo_total_general) * 100 if consumo_total_general > 0 else 0
 
                 values = (departamento, codigo, nombre_producto, diario, semanal, mensual, unidad_medida, f"{porcentaje:.2f}%")
@@ -1419,7 +1456,7 @@ def calcular_consumo_periodo(periodo):
             cursor.execute(query, val)
             salidas_periodo = cursor.fetchall()
             for nombre_departamento, codigo_producto, cantidad, fecha_salida, unidad_medida, nombre_producto in salidas_periodo:
-                # Usamos nombre_departamento aquí, que es el alias de d.NombreDepartamento
+               
                 if nombre_departamento not in consumo_departamentos:
                     consumo_departamentos[nombre_departamento] = {}
                 if codigo_producto not in consumo_departamentos[nombre_departamento]:
@@ -1498,7 +1535,7 @@ def generar_reporte_bajo_stock():
             cursor.close()
             mydb.close()
 
-    datos_reporte = [] # Lista para almacenar los datos del reporte
+    datos_reporte = [] 
     if productos_bajo_stock:
         tabla_bajo_stock = ttk.Treeview(ventana_reporte, columns=("Código", "Producto", "Stock Actual", "Unidad Medida"), show="headings", style="Grid.Treeview")
         tabla_bajo_stock.pack(fill=tk.BOTH, expand=True)
@@ -1536,7 +1573,7 @@ def generar_reporte_entradas():
     ventana_reporte.geometry("800x500")
     ventana_reporte.configure(bg="#A9A9A9")
 
-    # --- Estilos ttk Personalizados --- (Mantenlos como están)
+   
     style = ttk.Style(ventana_reporte)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -1545,26 +1582,26 @@ def generar_reporte_entradas():
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
 
-    # Treeview (tabla) para mostrar las entradas
+   
     tabla_entradas = ttk.Treeview(ventana_reporte, columns=("Código", "Producto", "Cantidad", "Fecha", "Destino", "EntradaID"), show="headings", style="Grid.Treeview")
     tabla_entradas.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-    tabla_entradas.column("EntradaID", width=0, stretch=tk.NO) # Columna oculta para el ID
+    tabla_entradas.column("EntradaID", width=0, stretch=tk.NO)
 
-    # Definir encabezados de columna
+   
     tabla_entradas.heading("Código", text="Código", anchor=tk.W)
     tabla_entradas.heading("Producto", text="Producto", anchor=tk.W)
     tabla_entradas.heading("Cantidad", text="Cantidad", anchor=tk.W)
     tabla_entradas.heading("Fecha", text="Fecha", anchor=tk.W)
     tabla_entradas.heading("Destino", text="Destino", anchor=tk.W)
 
-    # Configurar ancho de columnas
+    
     tabla_entradas.column("Código", width=100)
     tabla_entradas.column("Producto", width=150)
     tabla_entradas.column("Cantidad", width=80)
     tabla_entradas.column("Fecha", width=100)
     tabla_entradas.column("Destino", width=150)
 
-    # Barras de desplazamiento
+    
     scrollbar_vertical = ttk.Scrollbar(ventana_reporte, orient="vertical", command=tabla_entradas.yview)
     scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
     tabla_entradas.configure(yscrollcommand=scrollbar_vertical.set)
@@ -1598,7 +1635,7 @@ def generar_reporte_entradas():
         seleccion = tabla_entradas.selection()
         if seleccion:
             item_id = seleccion[0]
-            entrada_id = tabla_entradas.item(item_id, "values")[-1] # Obtener el EntradaID (último valor)
+            entrada_id = tabla_entradas.item(item_id, "values")[-1] 
 
             if messagebox.askyesno("Eliminar Entrada", "¿Seguro que desea eliminar esta entrada?"):
                 mydb = conectar_mysql()
@@ -1690,7 +1727,7 @@ def generar_reporte_entradas():
                     try:
                         cursor.execute(query_actualizar, (codigo_actual, cantidad_editada, fecha_editada, destino_editado, entrada_id))
                         mydb.commit()
-                        cargar_entradas() # Recargar la tabla después de editar
+                        cargar_entradas() 
                         ventana_edicion.destroy()
                         messagebox.showinfo("Entrada Editada", "La entrada ha sido actualizada.")
                     except mysql.connector.Error as err:
@@ -1738,19 +1775,30 @@ def generar_reporte_entradas():
 
         entry_abreviatura.bind("<KeyRelease>", filtrar_por_abreviatura)
 
-    # Crear menú contextual (clic derecho)
+    
     menu_contextual = tk.Menu(ventana_reporte, tearoff=0)
     menu_contextual.add_command(label="Eliminar", command=eliminar_entrada)
     menu_contextual.add_command(label="Editar", command=editar_entrada)
     menu_contextual.add_command(label="Buscar por Abreviatura", command=buscar_producto_abreviatura)
 
-    # Vincular el menú contextual al clic derecho
+    
     def mostrar_menu_contextual(event):
-        item = tabla_entradas.identify_row(event.y)
-        if item:
-            tabla_entradas.selection_set(item)
-            menu_contextual.post(event.x_root, event.y_root)
+        """
+        Muestra el menú contextual de clic derecho solo si el usuario es administrador.
+        """
+        global current_user_role_is_admin # <--- Asegúrate de declarar la variable global aquí
 
+        if current_user_role_is_admin: # <--- Condición para verificar el rol
+            item = tabla_entradas.identify_row(event.y)
+            if item:
+                tabla_entradas.selection_set(item)
+                menu_contextual.post(event.x_root, event.y_root)
+        else:
+            # Opcional: Puedes mostrar un mensaje al operador si intenta hacer clic derecho.
+            messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial.")
+
+    # Esta línea va dentro de tu función de reporte (e.g., generar_reporte_entradas)
+    # después de que 'tabla_entradas' y 'menu_contextual' hayan sido creados.
     tabla_entradas.bind("<Button-3>", mostrar_menu_contextual)
 
 def generar_reporte_salidas():
@@ -1760,7 +1808,7 @@ def generar_reporte_salidas():
     ventana_reporte_salidas.geometry("900x500")
     ventana_reporte_salidas.configure(bg="#A9A9A9")
 
-    # --- Estilos ttk Personalizados --- (Mantenlos como están)
+    
     style = ttk.Style(ventana_reporte_salidas)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -1776,7 +1824,7 @@ def generar_reporte_salidas():
     tree.heading("Fecha", text="Fecha", anchor=tk.W)
     tree.heading("Destino", text="Destino", anchor=tk.W)
     tree.heading("Requisición", text="Requisición", anchor=tk.W)
-    tree.column("SalidaID", width=0, stretch=tk.NO) # Columna oculta para el ID
+    tree.column("SalidaID", width=0, stretch=tk.NO) 
     tree.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
     scrollbar = ttk.Scrollbar(ventana_reporte_salidas, orient="vertical", command=tree.yview)
@@ -1800,7 +1848,7 @@ def generar_reporte_salidas():
                 cursor.execute(query)
                 salidas_db = cursor.fetchall()
                 for salida_id, codigo, producto, cantidad, fecha, destino, requisicion in salidas_db:
-                    # 'destino' ahora recibirá d.NombreDepartamento
+                   
                     tree.insert("", "end", values=(codigo, producto, cantidad, fecha.strftime("%Y-%m-%d"), destino, requisicion, salida_id))
             except mysql.connector.Error as err:
                 messagebox.showerror("Error", f"Error al cargar las salidas: {err}")
@@ -1814,7 +1862,7 @@ def generar_reporte_salidas():
         seleccion = tree.selection()
         if seleccion:
             item_id = seleccion[0]
-            salida_id = tree.item(item_id, "values")[-1] # Obtener el SalidaID
+            salida_id = tree.item(item_id, "values")[-1] 
 
             if messagebox.askyesno("Eliminar Salida", "¿Seguro que desea eliminar esta salida?"):
                 mydb = conectar_mysql()
@@ -1914,7 +1962,7 @@ def generar_reporte_salidas():
                     try:
                         cursor.execute(query_actualizar, (codigo_actual, cantidad_editada, fecha_editada, destino_editado, requisicion_editada, salida_id))
                         mydb.commit()
-                        cargar_salidas() # Recargar la tabla
+                        cargar_salidas() 
                         ventana_edicion.destroy()
                         messagebox.showinfo("Salida Editada", "La salida ha sido actualizada.")
                     except mysql.connector.Error as err:
@@ -1962,27 +2010,41 @@ def generar_reporte_salidas():
 
         entry_abreviatura.bind("<KeyRelease>", filtrar_por_abreviatura)
 
-    # Crear menú contextual (clic derecho)
+    
     menu_contextual = tk.Menu(ventana_reporte_salidas, tearoff=0)
     menu_contextual.add_command(label="Eliminar", command=eliminar_salida)
     menu_contextual.add_command(label="Editar", command=editar_salida)
     menu_contextual.add_command(label="Buscar por Abreviatura", command=buscar_producto_abreviatura)
 
-    # Vincular el menú contextual al clic derecho
+    
     def mostrar_menu_contextual(event):
-        item = tree.identify_row(event.y)
-        if item:
-            tree.selection_set(item)
-            menu_contextual.post(event.x_root, event.y_root)
+        """
+        Muestra el menú contextual de clic derecho solo si el usuario es administrador
+        para el reporte de salidas.
+        """
+        global current_user_role_is_admin # <--- Declaración de variable global
 
+        if current_user_role_is_admin: # <--- Condición para administradores
+            item = tree.identify_row(event.y)
+            if item:
+                tree.selection_set(item)
+                menu_contextual.post(event.x_root, event.y_root)
+        else:
+            # Mensaje para operadores que intenten hacer clic derecho
+            messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial de salidas.")
+
+    # Esta línea debe estar dentro de la función que genera el reporte de salidas,
+    # después de que 'tree' y 'menu_contextual' hayan sido inicializados.
     tree.bind("<Button-3>", mostrar_menu_contextual)
 
+    # El resto de tu código para configurar la ventana de reporte de salidas:
     ventana_reporte_salidas.grid_columnconfigure(0, weight=1)
     ventana_reporte_salidas.grid_rowconfigure(0, weight=1)
-    # Ya no guardamos los datos del reporte directamente aquí, las modificaciones se hacen en la base de datos
 
-ventana_reporte_salidas_espera = None  # Variable global para la ventana del reporte de espera
-tabla_salidas_espera = None          # Variable global para la tabla
+    # Estas líneas que parecen globales, si lo son, deberían estar en el ámbito global o
+    # dentro de una función principal que las inicialice una vez.
+    ventana_reporte_salidas_espera = None
+    tabla_salidas_espera = None
 
 
 def actualizar_tabla_salidas_espera():
@@ -2003,7 +2065,7 @@ def actualizar_tabla_salidas_espera():
             try:
                 cursor.execute(query)
                 salidas_espera_db = cursor.fetchall()
-                for espera_id, codigo, producto, cantidad, departamento_nombre in salidas_espera_db: # Variable cambiada a 'departamento_nombre'
+                for espera_id, codigo, producto, cantidad, departamento_nombre in salidas_espera_db: 
                     tabla_salidas_espera.insert("", tk.END, values=(codigo, producto, cantidad, departamento_nombre, espera_id))
             except mysql.connector.Error as err:
                 messagebox.showerror("Error", f"Error al actualizar la tabla de salidas en espera: {err}")
@@ -2026,7 +2088,7 @@ def generar_reporte_salidas_espera():
     ventana_reporte_salidas_espera.geometry("700x500")
     ventana_reporte_salidas_espera.configure(bg="#A9A9A9")
 
-    # --- Estilos ttk Personalizados --- (Mantenlos como están)
+   
     style = ttk.Style(ventana_reporte_salidas_espera)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -2035,24 +2097,24 @@ def generar_reporte_salidas_espera():
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
 
-    # Treeview (tabla) para mostrar las salidas en espera
+   
     tabla_salidas_espera = ttk.Treeview(ventana_reporte_salidas_espera, columns=("Código", "Producto", "Cantidad", "Departamento", "EsperaID"), show="headings", style="Grid.Treeview")
     tabla_salidas_espera.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-    tabla_salidas_espera.column("EsperaID", width=0, stretch=tk.NO) # Columna oculta para el ID
+    tabla_salidas_espera.column("EsperaID", width=0, stretch=tk.NO) 
 
-    # Definir encabezados de columna
+   
     tabla_salidas_espera.heading("Código", text="Código", anchor=tk.W)
     tabla_salidas_espera.heading("Producto", text="Producto", anchor=tk.W)
     tabla_salidas_espera.heading("Cantidad", text="Cantidad", anchor=tk.W)
     tabla_salidas_espera.heading("Departamento", text="Departamento", anchor=tk.W)
 
-    # Configurar ancho de columnas
+    
     tabla_salidas_espera.column("Código", width=100)
     tabla_salidas_espera.column("Producto", width=200)
     tabla_salidas_espera.column("Cantidad", width=100)
     tabla_salidas_espera.column("Departamento", width=200)
 
-    # Barras de desplazamiento
+ 
     scrollbar_vertical = ttk.Scrollbar(ventana_reporte_salidas_espera, orient="vertical", command=tabla_salidas_espera.yview)
     scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=10)
     tabla_salidas_espera.configure(yscrollcommand=scrollbar_vertical.set)
@@ -2066,8 +2128,8 @@ def generar_reporte_salidas_espera():
             values = tabla_salidas_espera.item(item, "values")
             if len(values) >= 5:
                 codigo_producto = values[0]
-                producto_nombre = values[1] # Añadido para el mensaje de éxito
-                cantidad_salida = int(values[2]) # Convertir a int para operaciones
+                producto_nombre = values[1] 
+                cantidad_salida = int(values[2]) 
                 departamento_nombre = values[3]
                 espera_id = values[4]
 
@@ -2087,7 +2149,7 @@ def generar_reporte_salidas_espera():
                     if mydb:
                         cursor = mydb.cursor()
                         try:
-                            # 1. Obtener el ProductoID y el DepartamentoID
+                           
                             cursor.execute("SELECT ProductoID FROM productos WHERE Codigo = %s", (codigo_producto,))
                             resultado_prod = cursor.fetchone()
                             if not resultado_prod:
@@ -2102,14 +2164,14 @@ def generar_reporte_salidas_espera():
                                 return
                             departamento_id_para_salida = resultado_dep[0]
 
-                            # 2. Insertar en la tabla de salidas
+                           
                             query_insert_salida = """
                                 INSERT INTO salidas (ProductoID, CodigoProducto, Cantidad, FechaSalida, DepartamentoID, NumeroRequisicion)
                                 VALUES (%s, %s, %s, %s, %s, %s)
                             """
                             cursor.execute(query_insert_salida, (producto_id_para_salida, codigo_producto, cantidad_salida, fecha_salida, departamento_id_para_salida, numero_requisicion))
 
-                            # 3. ACTUALIZAR la tabla 'productos' (¡ESTE ES EL CAMBIO CLAVE!)
+                            
                             query_update_producto = """
                                 UPDATE productos
                                 SET Stock = Stock - %s, FechaSalida = %s, DepartamentoID = %s
@@ -2117,20 +2179,18 @@ def generar_reporte_salidas_espera():
                             """
                             cursor.execute(query_update_producto, (cantidad_salida, fecha_salida, departamento_id_para_salida, producto_id_para_salida))
 
-                            # 4. Eliminar de la tabla de salidas en espera
+                           
                             query_eliminar_espera = "DELETE FROM salidas_espera WHERE SalidaEsperaID = %s"
                             cursor.execute(query_eliminar_espera, (espera_id,))
 
-                            mydb.commit() # Un solo commit para toda la transacción si todo fue bien
+                            mydb.commit()
                             messagebox.showinfo("Salida Registrada", f"La salida del producto '{producto_nombre}' al departamento '{departamento_nombre}' ha sido registrada y el inventario actualizado.")
 
-                            actualizar_tabla_salidas_espera() # Refresca la tabla de esperas
-                            # También necesitas refrescar la tabla principal de productos si está visible
-                            # Llama a tu función para actualizar la tabla principal aquí, por ejemplo:
-                            # actualizar_tabla_inventario() # Asegúrate de que esta función exista y sea accesible
+                            actualizar_tabla_salidas_espera()
+                           
 
                         except mysql.connector.Error as err:
-                            mydb.rollback() # Si algo falla, deshace todos los cambios
+                            mydb.rollback() 
                             messagebox.showerror("Error", f"Error al confirmar la requisición: {err}")
                         finally:
                             if mydb and mydb.is_connected():
@@ -2163,7 +2223,7 @@ def generar_reporte_salidas_espera():
         seleccion = tabla_salidas_espera.selection()
         if seleccion:
             item_id = seleccion[0]
-            espera_id = tabla_salidas_espera.item(item_id, "values")[-1] # Obtener SalidaEsperaID
+            espera_id = tabla_salidas_espera.item(item_id, "values")[-1]
 
             if messagebox.askyesno("Eliminar Salida en Espera", "¿Seguro que desea eliminar esta solicitud?"):
                 mydb = conectar_mysql()
@@ -2193,7 +2253,7 @@ def generar_reporte_salidas_espera():
             codigo_actual = values[0]
             producto_actual = values[1]
             cantidad_actual = values[2]
-            departamento_actual_nombre = values[3] # Obtener el nombre del departamento
+            departamento_actual_nombre = values[3]
             espera_id = values[4]
 
             ventana_edicion = tk.Toplevel(ventana_reporte_salidas_espera)
@@ -2217,12 +2277,11 @@ def generar_reporte_salidas_espera():
             entry_cantidad.insert(0, cantidad_actual)
 
             tk.Label(ventana_edicion, text="Departamento:", fg="#ffffff", bg="#A9A9A9").grid(row=3, column=0, padx=5, pady=5)
-            # Aquí necesitamos un Combobox para seleccionar el departamento por nombre
-            # y obtener su ID
+            
             departamentos_disponibles = obtener_departamentos()
             combo_departamento = ttk.Combobox(ventana_edicion, values=departamentos_disponibles, state="readonly")
             combo_departamento.grid(row=3, column=1, padx=5, pady=5)
-            combo_departamento.set(departamento_actual_nombre) # Establecer el valor actual
+            combo_departamento.set(departamento_actual_nombre) 
 
             def guardar_cambios():
                 producto_editado = entry_producto.get()
@@ -2231,13 +2290,13 @@ def generar_reporte_salidas_espera():
                 except ValueError:
                     messagebox.showerror("Error", "Cantidad debe ser un número entero.")
                     return
-                departamento_nombre_editado = combo_departamento.get() # Obtener el nombre del combobox
+                departamento_nombre_editado = combo_departamento.get()
 
                 mydb = conectar_mysql()
                 if mydb:
                     cursor = mydb.cursor()
                     try:
-                        # Obtener el DepartamentoID del nombre seleccionado
+                        
                         cursor.execute("SELECT DepartamentoID FROM departamentos WHERE NombreDepartamento = %s", (departamento_nombre_editado,))
                         resultado_dep = cursor.fetchone()
                         if not resultado_dep:
@@ -2295,7 +2354,7 @@ def generar_reporte_salidas_espera():
                 try:
                     cursor.execute(query_buscar, (f"%{abreviatura}%",))
                     salidas_filtradas_db = cursor.fetchall()
-                    for espera_id, codigo, producto, cantidad, departamento_nombre in salidas_filtradas_db: # Variable cambiada
+                    for espera_id, codigo, producto, cantidad, departamento_nombre in salidas_filtradas_db: 
                         tabla_salidas_espera.insert("", tk.END, values=(codigo, producto, cantidad, departamento_nombre, espera_id))
                 except mysql.connector.Error as err:
                     messagebox.showerror("Error", f"Error al buscar por abreviatura: {err}")
@@ -2306,14 +2365,14 @@ def generar_reporte_salidas_espera():
 
         entry_abreviatura.bind("<KeyRelease>", filtrar_por_abreviatura)
 
-    # Crear menú contextual (clic derecho)
+   
     menu_contextual = tk.Menu(ventana_reporte_salidas_espera, tearoff=0)
     menu_contextual.add_command(label="Eliminar", command=eliminar_salida_espera)
     menu_contextual.add_command(label="Editar", command=editar_salida_espera)
     menu_contextual.add_command(label="Agregar Requisición", command=agregar_requisicion)
     menu_contextual.add_command(label="Buscar por Abreviatura", command=buscar_producto_abreviatura)
 
-    # Vincular el menú contextual al clic derecho
+   
     def mostrar_menu_contextual(event):
         item = tabla_salidas_espera.identify_row(event.y)
         if item:
@@ -2325,7 +2384,7 @@ def generar_reporte_salidas_espera():
     ventana_reporte_salidas_espera.grid_columnconfigure(0, weight=1)
     ventana_reporte_salidas_espera.grid_rowconfigure(0, weight=1)
 
-# Asegúrate de tener esta función auxiliar para obtener los nombres de los departamentos
+
 def obtener_departamentos():
     departamentos = []
     mydb = conectar_mysql()
@@ -2396,7 +2455,7 @@ def ventana_reportes():
         if mydb:
             cursor = mydb.cursor()
             try:
-                # CORRECCIÓN AQUÍ: p.CategoriaID en lugar de p.CategoríaID
+                
                 cursor.execute("SELECT DISTINCT c.NombreCategoria FROM categorias c JOIN productos p ON c.CategoriaID = p.CategoriaID ORDER BY c.NombreCategoria")
                 categorias_db = [row[0] for row in cursor.fetchall()]
                 return ["Todas"] + sorted(categorias_db)
@@ -3256,27 +3315,27 @@ def mostrar_notificacion_bajo_stock():
     if productos_bajo_stock:
         mensaje = "¡Advertencia! Hay productos con bajo stock"
 
-        # Crear ventana de notificación flotante
+      
         ventana_notificacion = tk.Toplevel(ventana)
         ventana_notificacion.title("Advertencia: Bajo Stock")
-        ventana_notificacion.geometry("+{}+0".format(ventana.winfo_screenwidth() - 300))  # Posición superior derecha
-        ventana_notificacion.overrideredirect(True)  # Eliminar bordes y barra de título
+        ventana_notificacion.geometry("+{}+0".format(ventana.winfo_screenwidth() - 300))  
+        ventana_notificacion.overrideredirect(True) 
         ventana_notificacion.configure(bg="yellow")
 
-        # Etiqueta con el mensaje
+        
         label_mensaje = ttk.Label(ventana_notificacion, text=mensaje, background="yellow", foreground="black", padding=10, font=("Segoe UI", 10, "bold"))
         label_mensaje.pack()
 
-        # Botón para cerrar la notificación
+       
         boton_cerrar = ttk.Button(ventana_notificacion, text="Cerrar", command=ventana_notificacion.destroy)
         boton_cerrar.pack(pady=5)
 
-        # Destruir la notificación después de un tiempo (opcional)
+       
         ventana_notificacion.after(5000, ventana_notificacion.destroy)
 
 def importar_datos():
     """Importa datos desde el archivo JSON y actualiza el inventario."""
-    global inventario, entradas_departamentos  # Asegurarse de que estamos usando las variables globales
+    global inventario, entradas_departamentos 
 
     try:
         with open("inventario.json", "r", encoding="utf-8") as archivo:
@@ -3288,15 +3347,15 @@ def importar_datos():
                 fecha_salida = datetime.date.fromisoformat(datos_producto["fecha_salida"]) if datos_producto["fecha_salida"] and datos_producto["fecha_salida"] != 'None' else None
             except ValueError:
                 messagebox.showerror("Error", f"Fecha inválida para el producto {producto}. Se omitirá.")
-                continue  # Saltar al siguiente producto
+                continue  
             inventario[producto] = {
                 **datos_producto,
                 "fecha_entrada": fecha_entrada,
                 "fecha_salida": fecha_salida
             }
-        # Asegurarse de que entradas_departamentos sea una lista
+        
         entradas_departamentos = datos.get("entradas_departamentos", [])
-        if not isinstance(entradas_departamentos, list): #Verificamos si es lista, sino se asigna una lista vacía.
+        if not isinstance(entradas_departamentos, list): 
             entradas_departamentos = []
 
         messagebox.showinfo("Importar Datos", f"Se importaron {len(inventario)} productos.")
@@ -3310,7 +3369,7 @@ def importar_datos():
 
 def exportar_datos():
     """Exporta los datos del inventario a un archivo CSV."""
-    global inventario  # Asegurarse de que estamos usando la variable global
+    global inventario  
 
     try:
         archivo = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("Archivos CSV", "*.csv")])
@@ -3322,19 +3381,19 @@ def exportar_datos():
                 escritor_csv.writeheader()
 
                 for producto, datos in inventario.items():
-                    # Verificar si las fechas son válidas antes de formatearlas
+                   
                     fecha_entrada = datos["fecha_entrada"]
                     fecha_salida = datos["fecha_salida"]
 
                     if isinstance(fecha_entrada, datetime.date):
                         fecha_entrada_str = fecha_entrada.strftime("%Y-%m-%d")
                     else:
-                        fecha_entrada_str = "Fecha no disponible"  # O algún otro valor predeterminado
+                        fecha_entrada_str = "Fecha no disponible" 
 
                     if isinstance(fecha_salida, datetime.date):
                         fecha_salida_str = fecha_salida.strftime("%Y-%m-%d")
                     else:
-                        fecha_salida_str = "Fecha no disponible"  # O algún otro valor predeterminado
+                        fecha_salida_str = "Fecha no disponible"  
 
                     fila = {
                         "producto": producto,
@@ -3379,24 +3438,32 @@ def guardar_como():
 
 
 def mostrar_menu():
-    """Muestra el menú principal con la estructura original y colores oscuros."""
-    global ventana
+    """Muestra el menú principal con la estructura original, colores oscuros y privilegios."""
+    global ventana, current_user_role_is_admin 
 
     ventana = tk.Tk()
-    ventana.title("Menú Principal")
+    ventana.title("Menú Principal - " + ("Administrador" if current_user_role_is_admin else "Operador"))
     ventana.configure(bg="#263238")
+    ventana.geometry("1000x700")
+    ventana.resizable(True, True)
 
-    #
-    # --- Barra de Menú Superior   ---
+   
     menu_principal = tk.Menu(ventana)
     ventana.config(menu=menu_principal)
 
     menu_archivo = tk.Menu(menu_principal, tearoff=0)
     menu_principal.add_cascade(label="Archivo", menu=menu_archivo)
-    menu_archivo.add_command(label="Guardar", command=guardar_datos)
+    
+    
     menu_archivo.add_command(label="Guardar como...", command=guardar_como)
-    menu_archivo.add_command(label="Importar", command=importar_datos)
-    menu_archivo.add_command(label="Exportar", command=exportar_datos)
+    
+    if current_user_role_is_admin:
+        menu_archivo.add_command(label="Importar", command=importar_datos)
+        menu_archivo.add_command(label="Exportar", command=exportar_datos)
+    else:
+        menu_archivo.add_command(label="Importar", state=tk.DISABLED)
+        menu_archivo.add_command(label="Exportar", state=tk.DISABLED)
+        
     menu_archivo.add_separator()
     menu_archivo.add_command(label="Salir", command=ventana.destroy)
 
@@ -3410,10 +3477,15 @@ def mostrar_menu():
 
     menu_configuracion = tk.Menu(menu_principal, tearoff=0)
     menu_principal.add_cascade(label="Configuración", menu=menu_configuracion)
-    menu_configuracion.add_command(label="Ajustes generales", command=configuracion)
+    if current_user_role_is_admin:
+        menu_configuracion.add_command(label="Ajustes generales", command=configuracion)
+        menu_configuracion.add_command(label="Gestionar Usuarios", command=lambda: gestionar_usuarios(ventana))
+    else:
+        menu_configuracion.add_command(label="Ajustes generales", state=tk.DISABLED)
+        menu_configuracion.add_command(label="Gestionar Usuarios", state=tk.DISABLED)
 
 
-    # --- Estilos ttk Personalizados ---
+    
     style = ttk.Style(ventana)
     style.theme_use('clam')
 
@@ -3428,72 +3500,82 @@ def mostrar_menu():
               background=[('active', '#455a64')],
               foreground=[('active', '#fff')])
 
-    # --- Cargar Logos de los botones ---
+   
     try:
         ventana.logo_agregar_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/agregar-producto.png").subsample(3, 3)
-        print(f"Cargado logo_agregar: {ventana.logo_agregar_img}") # Debugging
-        logo_agregar = ventana.logo_agregar_img
+       
 
         ventana.logo_salida_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/espera.png").subsample(3, 3)
-        print(f"Cargado logo_salida: {ventana.logo_salida_img}") # Debugging
-        logo_salida = ventana.logo_salida_img
+      
 
         ventana.logo_mostrar_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/inventario.png").subsample(3, 3)
-        print(f"Cargado logo_mostrar: {ventana.logo_mostrar_img}") # Debugging
-        logo_mostrar = ventana.logo_mostrar_img
-
+       
         ventana.logo_consumo_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/consumo.png").subsample(3, 3)
-        print(f"Cargado logo_consumo: {ventana.logo_consumo_img}") # Debugging
-        logo_consumo = ventana.logo_consumo_img
+        
 
     except tk.TclError as e:
-        print(f"Error AL CARGAR imágenes: {e}")
-        logo_agregar = None
-        logo_salida = None
-        logo_mostrar = None
-        logo_consumo = None
+        print(f"Error AL CARGAR imágenes de botones: {e}")
+       
+        ventana.logo_agregar_img = None
+        ventana.logo_salida_img = None
+        ventana.logo_mostrar_img = None
+        ventana.logo_consumo_img = None
 
-    # --- Crear botones para cada opción con logos encima ---
-    print(f"Valor de logo_agregar ANTES del botón: {logo_agregar}") # Debugging
-    boton_agregar = ttk.Button(ventana, text="Agregar producto", image=ventana.logo_agregar_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=agregar_producto)
-    boton_agregar.image = ventana.logo_agregar_img  # Guardar referencia
+   
+    frame_botones_menu = tk.Frame(ventana, bg="#263238")
+    frame_botones_menu.pack(expand=True, fill="both", padx=20, pady=20)
+    frame_botones_menu.grid_columnconfigure(0, weight=1)
+    frame_botones_menu.grid_columnconfigure(1, weight=1)
 
-    boton_salida = ttk.Button(ventana, text="Realizar salida en espera", image=ventana.logo_salida_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=realizar_salida)
-    boton_salida.image = ventana.logo_salida_img  # Guardar referencia
+    
+    if current_user_role_is_admin:
+        boton_agregar = ttk.Button(frame_botones_menu, text="Agregar producto", image=ventana.logo_agregar_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=agregar_producto)
+        boton_agregar.image = ventana.logo_agregar_img
+        boton_agregar.grid(row=0, column=0, padx=10, pady=10, sticky="ew") 
 
-    boton_mostrar = ttk.Button(ventana, text="Mostrar inventario", image=ventana.logo_mostrar_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=lambda: mostrar_inventario(ventana))
-    boton_mostrar.image = ventana.logo_mostrar_img  # Guardar referencia
+       
+        boton_salida = ttk.Button(frame_botones_menu, text="Realizar salida en espera", image=ventana.logo_salida_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=realizar_salida)
+        boton_salida.image = ventana.logo_salida_img
+        boton_salida.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
-    boton_consumo = ttk.Button(ventana, text="Calcular consumo por departamento", image=ventana.logo_consumo_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=calcular_consumo_departamento)
-    boton_consumo.image = ventana.logo_consumo_img  # Guardar referencia
+   
+    if not current_user_role_is_admin:
+        
+        boton_mostrar = ttk.Button(frame_botones_menu, text="Mostrar inventario", image=ventana.logo_mostrar_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=lambda: mostrar_inventario(ventana))
+        boton_mostrar.image = ventana.logo_mostrar_img
+        boton_mostrar.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
 
-    # --- Organizar los botones en una cuadrícula ---
-    boton_agregar.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
-    boton_salida.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-    boton_mostrar.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
-    boton_consumo.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+        boton_consumo = ttk.Button(frame_botones_menu, text="Calcular consumo por departamento", image=ventana.logo_consumo_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=calcular_consumo_departamento)
+        boton_consumo.image = ventana.logo_consumo_img
+        boton_consumo.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+    else:
+       
+        boton_mostrar = ttk.Button(frame_botones_menu, text="Mostrar inventario", image=ventana.logo_mostrar_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=lambda: mostrar_inventario(ventana))
+        boton_mostrar.image = ventana.logo_mostrar_img
+        boton_mostrar.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
 
-    # --- Cargar y mostrar el logo en la esquina inferior derecha ---
+        boton_consumo = ttk.Button(frame_botones_menu, text="Calcular consumo por departamento", image=ventana.logo_consumo_img, compound=tk.TOP, style="MenuButtonDarkGrid.TButton", command=calcular_consumo_departamento)
+        boton_consumo.image = ventana.logo_consumo_img
+        boton_consumo.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+
+
+   
     try:
         ventana.logo_app_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/NEVA.png").subsample(4, 4) 
         logo_app_label = tk.Label(ventana, image=ventana.logo_app_img, bd=0, highlightthickness=0, bg="#263238") 
         logo_app_label.image = ventana.logo_app_img 
         logo_app_label.place(relx=1.0, rely=1.0, anchor=tk.SE, x=-10, y=-10) 
     except tk.TclError as e:
-        print(f"Error al cargar el logo de la aplicación: {e}")
+        print(f"Error al cargar el logo de la aplicación (NEVA.png): {e}")
 
-    # --- Configurar la expansión de las columnas ---
-    ventana.grid_columnconfigure(0, weight=1)
-    ventana.grid_columnconfigure(1, weight=1)
-
-
-    
-    
     mostrar_notificacion_bajo_stock()
+
+   
+
 
     ventana.mainloop()
 
-# --- Ejecución de la aplicación ---
+#  Ejecución de la aplicación 
 cargar_datos()
 
 
