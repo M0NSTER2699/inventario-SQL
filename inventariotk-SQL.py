@@ -24,6 +24,8 @@ import uuid
 
 import mysql.connector
 
+#conector a la base de datos mysql
+
 def conectar_mysql():
     try:
         mydb = mysql.connector.connect(
@@ -41,6 +43,13 @@ def conectar_mysql():
 lista_usuarios_widget = None
 clave_admin = hashlib.sha256("NEVA".encode()).hexdigest()
 current_user_role_is_admin = False
+inventario = {}
+entradas_departamentos = []
+tabla_inventario_principal = None
+ventana_reporte_salidas_espera = None
+tabla_salidas_espera = None
+menu_contextual = None
+ventana = None
 
 
 
@@ -49,9 +58,11 @@ current_user_role_is_admin = False
 
 
 
+
+                            #guarda todo los datos del programa
 
 def guardar_datos():
-    """Guarda los datos en un archivo JSON."""
+    """Guarda los datos en un archivo sql."""
     global datos_consumo_para_guardar, datos_reportes_para_guardar, usuarios, entradas_departamentos 
 
     datos_reportes_para_guardar["Entradas"] = [
@@ -98,6 +109,12 @@ def guardar_datos():
         messagebox.showerror("Error", f"Error de tipo de datos: {e}")
     except Exception as e:
         messagebox.showerror("Error", f"Error inesperado: {e}")
+
+
+
+
+
+                        #carga todos los datos al programa
 
 def cargar_datos():
     """Carga los datos desde un archivo JSON y los inserta en MySQL."""
@@ -240,6 +257,12 @@ def insertar_inventario_mysql(inventario):
     cursor.close()
     mydb.close()
     print("Proceso de inserción del inventario en MySQL completado (se omitieron duplicados).")
+
+
+
+
+
+                        #ES EL CODIGO DE ACCESO EN ESTE CASO NEVA
         
 
 def verificar_clave(ventana_clave, entry_clave, ventana_login):
@@ -260,6 +283,10 @@ def verificar_clave(ventana_clave, entry_clave, ventana_login):
     else:
         messagebox.showerror("Acceso Denegado", "Clave de administrador incorrecta.")
         current_user_role_is_admin = False 
+
+
+
+        #INICIA SESION AL PROGRAMA CON EL USUARIO PRESETERMINADO Y CREADOS DENTRO DEL PROGRAMA
 
 def iniciar_sesion():
     """Permite al usuario iniciar sesión y establece los privilegios."""
@@ -432,6 +459,10 @@ def abrir_calendario(ventana_padre, entry_fecha):
     
     
                                             #funciones principales:
+
+
+
+                        #INGRESA PRODUCTOS NUEVOS AL INVENTARIO
        
 def agregar_producto():
     """Agrega un producto al inventario con fecha de entrada manual y código basado en la categoría."""
@@ -501,21 +532,58 @@ def agregar_producto():
             return f"{prefijo}-{ultimo_numero + 1:03d}"
 
     def agregar():
-        producto_nombre = entry_producto.get()
-        categoria_nombre = categoria_var.get()
-        entrada_cantidad = int(entry_entrada.get())
-        unidad_medida = unidad_medida_var.get()
-        fecha_entrada = datetime.datetime.now()
+        producto_nombre = entry_producto.get().strip() 
+        categoria_nombre = categoria_var.get().strip()
+        entrada_cantidad_str = entry_entrada.get().strip() 
+        unidad_medida = unidad_medida_var.get().strip()
+        fecha_entrada_str = entry_fecha_entrada.get().strip() 
+
+        # --- VALIDACIÓN DE CAMPOS ---
+        if not producto_nombre:
+            messagebox.showwarning("Campos Incompletos", "Por favor, ingrese el nombre del producto.")
+            return
+        if not categoria_nombre or categoria_nombre == "Añadir nueva":
+            messagebox.showwarning("Campos Incompletos", "Por favor, seleccione o añada una categoría válida.")
+            return
+        if not entrada_cantidad_str:
+            messagebox.showwarning("Campos Incompletos", "Por favor, ingrese la cantidad de entrada.")
+            return
+        if not unidad_medida or unidad_medida == "Añadir nueva": 
+            messagebox.showwarning("Campos Incompletos", "Por favor, seleccione o añada una unidad de medida válida.")
+            return
+        if not fecha_entrada_str:
+            messagebox.showwarning("Campos Incompletos", "Por favor, ingrese la fecha de entrada.")
+            return
+
+        
+        try:
+            entrada_cantidad = int(entrada_cantidad_str)
+            if entrada_cantidad <= 0:
+                messagebox.showwarning("Cantidad Inválida", "La cantidad de entrada debe ser un número positivo.")
+                return
+        except ValueError:
+            messagebox.showwarning("Cantidad Inválida", "La cantidad de entrada debe ser un número entero válido.")
+            return
+
+       
+        try:
+           
+            fecha_entrada = datetime.datetime.strptime(fecha_entrada_str, "%Y-%m-%d")
+        except ValueError:
+            messagebox.showwarning("Fecha Inválida", "El formato de la fecha debe ser AAAA-MM-DD (ej. 2025-05-26).")
+            return
+
+        
+
         codigo_producto = generar_codigo(categoria_nombre)
 
         mydb = conectar_mysql()
         if not mydb:
-            messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+            
             return
 
         cursor = mydb.cursor()
 
-       
         query_categoria_id = "SELECT CategoriaID FROM categorias WHERE NombreCategoria = %s"
         categoria_id = None
         try:
@@ -524,7 +592,8 @@ def agregar_producto():
             if resultado_categoria:
                 categoria_id = resultado_categoria[0]
             else:
-                messagebox.showerror("Error", f"La categoría '{categoria_nombre}' no existe.")
+            
+                messagebox.showerror("Error", f"La categoría '{categoria_nombre}' no existe en la base de datos.")
                 mydb.close()
                 return
         except mysql.connector.Error as err:
@@ -532,8 +601,7 @@ def agregar_producto():
             mydb.close()
             return
 
-        
-        destino_entrada_nombre = "Almacén principal"
+        destino_entrada_nombre = "Almacén principal" 
 
         sql_producto = """
             INSERT INTO productos (Codigo, Nombre, CategoriaID, Stock, UnidadMedida, FechaEntrada)
@@ -718,7 +786,7 @@ def agregar_producto():
     
  
 
-
+                                     #REALIZA UNA SALIDA PENDIENTE(ESPERA)
 def realizar_salida():
     """Realiza una salida en espera de productos del inventario, permitiendo búsqueda por nombre o código."""
 
@@ -903,7 +971,7 @@ def realizar_salida():
 
 
    
-
+         #MUESTRA TODO EL INVENTARIO DONDE PODEMOS REALIZAR ENTRADAS,SALIDAS,ELIMINAR ETC
 
 def mostrar_inventario(ventana):
     """Muestra el inventario con menú desplegable de categorías y búsqueda por nombre o código dentro de la categoría."""
@@ -999,6 +1067,7 @@ def mostrar_inventario(ventana):
     label_totales.pack()
 
     def mostrar_tabla(categoria_nombre="Todas", termino_busqueda=""):
+        
         tabla_productos.delete(*tabla_productos.get_children())
         mydb = conectar_mysql()
         if mydb:
@@ -1345,7 +1414,7 @@ def mostrar_inventario(ventana):
 
     
 
-
+                         #MUESTRA EL CONSUMO QUE A TENIDO CADA DEPARTAMENTO
 def calcular_consumo_departamento():
     """Calcula el consumo diario, semanal y mensual por departamento y en general desde la base de datos."""
     consumo_diario = calcular_consumo_periodo(datetime.timedelta(days=1))
@@ -1501,6 +1570,9 @@ def calcular_consumo_periodo(periodo):
 
                                     #Funciones de reportes:
 
+
+                     #GENERA UNA VENTANA CON LOS PRODUCTOS CON BAJO STOCK
+
 def generar_reporte_bajo_stock():
     """Genera un reporte de productos con bajo stock desde la base de datos MySQL y almacena los datos."""
     global datos_reportes_para_guardar
@@ -1565,8 +1637,8 @@ def generar_reporte_bajo_stock():
 
 
 
-
-
+            
+                        #GENERA UNA VENTANA CON TODAS LAS ENTRADAS DE PRODUCTOS
 def generar_reporte_entradas():
     """Genera un reporte del historial de entradas desde la base de datos MySQL."""
     ventana_reporte = tk.Toplevel(ventana)
@@ -1787,21 +1859,23 @@ def generar_reporte_entradas():
         """
         Muestra el menú contextual de clic derecho solo si el usuario es administrador.
         """
-        global current_user_role_is_admin # <--- Asegúrate de declarar la variable global aquí
+        global current_user_role_is_admin
 
-        if current_user_role_is_admin: # <--- Condición para verificar el rol
+        if current_user_role_is_admin: 
             item = tabla_entradas.identify_row(event.y)
             if item:
                 tabla_entradas.selection_set(item)
                 menu_contextual.post(event.x_root, event.y_root)
         else:
-            # Opcional: Puedes mostrar un mensaje al operador si intenta hacer clic derecho.
+           
             messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial.")
 
-    # Esta línea va dentro de tu función de reporte (e.g., generar_reporte_entradas)
-    # después de que 'tabla_entradas' y 'menu_contextual' hayan sido creados.
+  
     tabla_entradas.bind("<Button-3>", mostrar_menu_contextual)
 
+
+
+                        #GENERA UNA VENTANA CON TODOS LOS PRODUCTOS QUE HAN SALIDO
 def generar_reporte_salidas():
     """Genera un reporte del historial de salidas desde la base de datos MySQL."""
     ventana_reporte_salidas = tk.Toplevel(ventana)
@@ -2070,6 +2144,11 @@ def actualizar_tabla_salidas_espera():
                 if mydb and mydb.is_connected():
                     cursor.close()
                     mydb.close()
+
+
+
+
+                    #GENERA UNA VENTANA CON TODAS LAS SALIDAS PENDIENTES(ESPERA)
 
 def generar_reporte_salidas_espera():
     """Genera o trae al frente la ventana del reporte de salidas en espera desde la base de datos."""
@@ -2425,7 +2504,10 @@ def abrir_calendario(parent, entry):
     tk.Button(ventana_calendario, text="Seleccionar", command=seleccionar_fecha).pack(pady=5)
 
 
+         
 
+
+             #GENERA UNA VENTANA DONDE PODEMOS REALIZAR VARIOS REPORTES PARA EXPORTAR A PDF
 def ventana_reportes():
     """Crea una ventana para generar reportes con opciones de filtrado y nuevos reportes."""
     ventana_reporte = tk.Toplevel()
@@ -2847,6 +2929,10 @@ class PDFConMembrete(FPDF):
         self.ln()
 
 
+
+
+
+                                    #ME GENERA UN PDF
 def exportar_tabla_pdf(tabla_treeview):
     """Exporta los datos del Treeview a un PDF con membrete según el diseño y lo abre en el navegador."""
 
@@ -3341,94 +3427,266 @@ def mostrar_notificacion_bajo_stock():
 
        
         ventana_notificacion.after(5000, ventana_notificacion.destroy)
+def mostrar_tabla():
+    global tabla_inventario_principal, inventario
+
+    if tabla_inventario_principal is None or not tabla_inventario_principal.winfo_exists():
+        
+        return
+
+   
+    for item in tabla_inventario_principal.get_children():
+        tabla_inventario_principal.delete(item)
+
+    
+    for codigo, datos in inventario.items():
+        tabla_inventario_principal.insert("", tk.END, values=(
+            datos["codigo"],
+            datos["nombre"],
+            datos["cantidad"],
+            datos["departamento"],
+            datos["fecha_entrada"].strftime("%Y-%m-%d") if datos["fecha_entrada"] else "",
+            datos["fecha_salida"].strftime("%Y-%m-%d") if datos["fecha_salida"] else "",
+            datos["unidad_medida"]
+        ))
+    print("DEBUG: Tabla de inventario principal actualizada desde mostrar_tabla().")
 
 def importar_datos():
-    """Importa datos desde el archivo JSON y actualiza el inventario."""
-    global inventario, entradas_departamentos 
+    """Importa datos del inventario y movimientos desde la base de datos MySQL."""
+    global inventario, entradas_departamentos
+    inventario = {}
+    entradas_departamentos = []
+    mydb = conectar_mysql()
+    if mydb:
+        cursor = mydb.cursor(dictionary=True)
+        try:
+           
+            query_productos = """
+                SELECT
+                    p.ProductoID,
+                    p.Codigo,
+                    p.Nombre AS ProductoNombre,
+                    p.Stock AS Cantidad,
+                    p.FechaEntrada,
+                    p.FechaSalida,
+                    p.UnidadMedida,
+                    p.CategoriaID,
+                    d.NombreDepartamento AS Departamento
+                FROM
+                    productos p
+                LEFT JOIN
+                    departamentos d ON p.DepartamentoID = d.DepartamentoID
+                ORDER BY p.Codigo;
+            """
+            cursor.execute(query_productos)
+            productos_db = cursor.fetchall()
+            for prod in productos_db:
+                codigo = prod["Codigo"]
+                inventario[codigo] = {
+                    "codigo": prod["Codigo"],
+                    "nombre": prod["ProductoNombre"],
+                    "cantidad": prod["Cantidad"],
+                    "descripcion": "",
+                    "fecha_entrada": prod["FechaEntrada"],
+                    "fecha_salida": prod["FechaSalida"],
+                    "departamento": prod["Departamento"],
+                    "ubicacion": "",
+                    "responsable": "N/A",
+                    "unidad_medida": prod["UnidadMedida"],
+                    "categoria_id": prod["CategoriaID"]
+                }
 
+            
+            query_entradas = """
+                SELECT
+                    e.FechaEntrada AS Fecha,
+                    p.Nombre AS Producto,
+                    e.Cantidad,
+                    e.Destino AS Departamento,
+                    'Entrada' AS TipoMovimiento
+                FROM
+                    entradas e
+                JOIN
+                    productos p ON e.ProductoID = p.ProductoID
+                ORDER BY e.FechaEntrada DESC
+                LIMIT 50;
+            """
+            cursor.execute(query_entradas)
+            movimientos_entradas = cursor.fetchall()
+
+           
+            query_salidas = """
+                SELECT
+                    s.FechaSalida AS Fecha,
+                    p.Nombre AS Producto,
+                    s.Cantidad,
+                    d.NombreDepartamento AS Departamento,
+                    s.NumeroRequisicion,
+                    'Salida' AS TipoMovimiento
+                FROM
+                    salidas s
+                JOIN
+                    productos p ON s.ProductoID = p.ProductoID
+                LEFT JOIN
+                    departamentos d ON s.DepartamentoID = d.DepartamentoID
+                ORDER BY s.FechaSalida DESC
+                LIMIT 50;
+            """
+            cursor.execute(query_salidas)
+            movimientos_salidas = cursor.fetchall()
+
+            todos_movimientos = movimientos_entradas + movimientos_salidas
+            todos_movimientos.sort(key=lambda x: x['Fecha'] if x['Fecha'] else datetime.datetime.min, reverse=True)
+
+            for movimiento in todos_movimientos:
+                fecha_str = movimiento["Fecha"].strftime("%Y-%m-%d %H:%M:%S") if movimiento["Fecha"] else "N/A"
+                producto = movimiento["Producto"]
+                cantidad = movimiento["Cantidad"]
+                departamento = movimiento.get("Departamento", "N/A")
+                tipo = movimiento["TipoMovimiento"]
+                if tipo == 'Entrada':
+                    responsable = "Sistema"
+                    entradas_departamentos.append(f"[{fecha_str}] {tipo} de {cantidad}x '{producto}' en {departamento} por {responsable}")
+                elif tipo == 'Salida':
+                    requisicion = movimiento.get("NumeroRequisicion", "N/A")
+                    entradas_departamentos.append(f"[{fecha_str}] {tipo} de {cantidad}x '{producto}' a {departamento} (Req: {requisicion})")
+
+            messagebox.showinfo("Importar Datos", f"Se importaron {len(inventario)} productos y {len(entradas_departamentos)} registros de movimientos desde MySQL.")
+
+            
+            mostrar_tabla()
+
+        except mysql.connector.Error as err:
+            messagebox.showerror("Error de Base de Datos", f"Error al importar datos desde MySQL: {err}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Ocurrió un error inesperado al importar los datos: {e}")
+        finally:
+            if mydb and mydb.is_connected():
+                cursor.close()
+                mydb.close()
+    else:
+        messagebox.showerror("Error de Conexión", "No se pudo establecer conexión con la base de datos.")
+
+
+
+def get_create_table_statement(cursor, table_name):
     try:
-        with open("inventario.json", "r", encoding="utf-8") as archivo:
-            datos = json.load(archivo)
-        inventario = {}
-        for producto, datos_producto in datos.get("inventario", {}).items():
-            try:
-                fecha_entrada = datetime.date.fromisoformat(datos_producto["fecha_entrada"]) if datos_producto["fecha_entrada"] and datos_producto["fecha_entrada"] != 'None' else None
-                fecha_salida = datetime.date.fromisoformat(datos_producto["fecha_salida"]) if datos_producto["fecha_salida"] and datos_producto["fecha_salida"] != 'None' else None
-            except ValueError:
-                messagebox.showerror("Error", f"Fecha inválida para el producto {producto}. Se omitirá.")
-                continue  
-            inventario[producto] = {
-                **datos_producto,
-                "fecha_entrada": fecha_entrada,
-                "fecha_salida": fecha_salida
-            }
+        cursor.execute(f"SHOW CREATE TABLE `{table_name}`;")
+        result = cursor.fetchone()
+        if result:
+            return result['Create Table']
+        return None
+    except Exception as e:
+        print(f"Error al obtener CREATE TABLE para {table_name}: {e}")
+        return None
+
+def get_insert_statements(cursor, table_name):
+    inserts = []
+    try:
         
-        entradas_departamentos = datos.get("entradas_departamentos", [])
-        if not isinstance(entradas_departamentos, list): 
-            entradas_departamentos = []
+        cursor.execute(f"SELECT * FROM `{table_name}`;")
+        
+        
+        columns = [col[0] for col in cursor.description]
+        
+        rows = cursor.fetchall()
 
-        messagebox.showinfo("Importar Datos", f"Se importaron {len(inventario)} productos.")
-
-    except FileNotFoundError:
-        messagebox.showerror("Error", "No se encontró el archivo inventario.json.")
-    except json.JSONDecodeError as e:
-        messagebox.showerror("Error", f"Error al cargar los datos: Formato JSON incorrecto.\nDetalles: {e}")
-    except Exception as e:
-        messagebox.showerror("Error", f"Ocurrió un error al importar los datos: {e}")
-
-def exportar_datos():
-    """Exporta los datos del inventario a un archivo CSV."""
-    global inventario  
-
-    try:
-        archivo = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("Archivos CSV", "*.csv")])
-
-        if archivo:
-            with open(archivo, 'w', newline='', encoding='utf-8') as file:
-                campos = ["producto", "categoria", "destino_entrada", "entrada", "salida", "stock", "unidad_medida", "fecha_entrada", "fecha_salida", "destino_salida"]
-                escritor_csv = csv.DictWriter(file, fieldnames=campos)
-                escritor_csv.writeheader()
-
-                for producto, datos in inventario.items():
+        for row_dict in rows: 
+            values = []
+            for col_name in columns:
+                value = row_dict[col_name] 
+                if value is None:
+                    values.append("NULL")
+                elif isinstance(value, (int, float)):
+                    values.append(str(value))
+                elif isinstance(value, datetime.date):
+                    values.append(f"'{value.strftime('%Y-%m-%d')}'")
+                elif isinstance(value, datetime.datetime):
+                    values.append(f"'{value.strftime('%Y-%m-%d %H:%M:%S')}'")
+                else:
                    
-                    fecha_entrada = datos["fecha_entrada"]
-                    fecha_salida = datos["fecha_salida"]
-
-                    if isinstance(fecha_entrada, datetime.date):
-                        fecha_entrada_str = fecha_entrada.strftime("%Y-%m-%d")
-                    else:
-                        fecha_entrada_str = "Fecha no disponible" 
-
-                    if isinstance(fecha_salida, datetime.date):
-                        fecha_salida_str = fecha_salida.strftime("%Y-%m-%d")
-                    else:
-                        fecha_salida_str = "Fecha no disponible"  
-
-                    fila = {
-                        "producto": producto,
-                        "categoria": datos["categoria"],
-                        "destino_entrada": datos["destino_entrada"],
-                        "entrada": datos["entrada"],
-                        "salida": datos["salida"],
-                        "stock": datos["stock"],
-                        "unidad_medida": datos["unidad_medida"],
-                        "fecha_entrada": fecha_entrada_str,
-                        "fecha_salida": fecha_salida_str,
-                        "destino_salida": datos["destino_salida"]
-                    }
-                    escritor_csv.writerow(fila)
-
-            messagebox.showinfo("Exportar Datos", f"Se exportaron {len(inventario)} productos.")
-
+                    escaped_value = str(value).replace("'", "''")
+                    values.append(f"'{escaped_value}'")
+            
+            
+            columns_str = '`, `'.join(columns)
+            values_str = ', '.join(values)
+            inserts.append(f"INSERT INTO `{table_name}` (`{columns_str}`) VALUES ({values_str});")
+            
+        return inserts
     except Exception as e:
-        messagebox.showerror("Error", f"Ocurrió un error al exportar los datos: {e}")
+        print(f"Error al obtener INSERT statements para {table_name}: {e}")
+        return []
+    
+def exportar_datos():
+    """Exporta la estructura y los datos de TODAS las tablas de la base de datos a un archivo .sql."""
+    
+    all_tables = [
+        "productos",
+        "entradas",
+        "salidas",
+        "salidas_espera",
+        "usuarios",
+        "departamentos"
+    ]
+
+   
+    output_file = filedialog.asksaveasfilename(
+        defaultextension=".sql",
+        filetypes=[("Archivos SQL", "*.sql")],
+        title="Guardar Base de Datos como SQL"
+    )
+
+    if not output_file:
+        messagebox.showinfo("Exportar Datos", "Exportación cancelada.")
+        return
+
+    mydb = conectar_mysql()
+    if not mydb:
+        return
+
+    cursor = mydb.cursor(dictionary=True)
+    try:
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(f"-- SQL Export generated by Inventory App on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write("SET FOREIGN_KEY_CHECKS = 0;\n\n") 
+
+            for table_name in all_tables:
+                f.write(f"-- Dumping table `{table_name}`\n")
+                f.write(f"DROP TABLE IF EXISTS `{table_name}`;\n")
+
+                # Incluir estructura (CREATE TABLE)
+                create_statement = get_create_table_statement(cursor, table_name)
+                if create_statement:
+                    f.write(create_statement + ";\n")
+                else:
+                    messagebox.showwarning("Advertencia de Exportación", f"No se pudo obtener la estructura para la tabla: {table_name}. Se omitirá.")
+                    continue 
+
+                
+                inserts = get_insert_statements(cursor, table_name)
+                if inserts:
+                    for insert_sql in inserts:
+                        f.write(insert_sql + "\n")
+                else:
+                    f.write(f"-- No data to export for table `{table_name}`\n")
+                f.write("\n") 
+
+            f.write("SET FOREIGN_KEY_CHECKS = 1;\n") 
+
+        messagebox.showinfo("Exportar Datos", f"Toda la base de datos exportada exitosamente a:\n{output_file}")
+
+    except mysql.connector.Error as err:
+        messagebox.showerror("Error de Base de Datos", f"Error al exportar datos a SQL: {err}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Ocurrió un error inesperado al exportar los datos: {e}")
+    finally:
+        if mydb and mydb.is_connected():
+            cursor.close()
+            mydb.close()
 
 def guardar_como():
-    """Permite al usuario elegir la ubicación y el nombre del archivo para guardar."""
-    archivo = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("Archivos JSON", "*.json")])
-    if archivo:
-        guardar_datos(archivo)
-            
+    exportar_datos()
 
 
 
