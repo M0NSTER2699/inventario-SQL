@@ -29,9 +29,10 @@ import mysql.connector
 def conectar_mysql():
     try:
         mydb = mysql.connector.connect(
-            host="127.0.0.1",       
-            user="root",     
-            database="sistema inventario corpoandes" 
+            host="192.168.0.5",       
+            user="almacen",
+            password="Almacen*",     
+            database="corpoandes_base_datos_almacen" 
         )
         return mydb
     except mysql.connector.Error as err:
