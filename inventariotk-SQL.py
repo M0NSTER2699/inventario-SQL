@@ -35,7 +35,7 @@ def conectar_mysql():
         )
         return mydb
     except mysql.connector.Error as err:
-        print(f"Error al conectar a MySQL: {err}")
+        messagebox.showerror(f"Error al conectar a MySQL: {err}")
         return None
 
 
@@ -224,7 +224,7 @@ def insertar_usuarios_mysql(usuarios_dict):
     mydb.commit()
     cursor.close()
     mydb.close()
-    print("Proceso de inserción de usuarios en MySQL completado (se omitieron duplicados).")
+    
 
 def insertar_inventario_mysql(inventario):
     mydb = conectar_mysql()
@@ -256,7 +256,7 @@ def insertar_inventario_mysql(inventario):
     mydb.commit()
     cursor.close()
     mydb.close()
-    print("Proceso de inserción del inventario en MySQL completado (se omitieron duplicados).")
+    
 
 
 
@@ -477,7 +477,6 @@ def agregar_producto():
             "PLASTICO": "PLA",
             "MATERIAL DE FERRETERIA": "FER",
             "OTROS": "OTR"
-            
         }
         prefijo = prefijos_categoria.get(categoria_nombre.upper(), "GEN")
 
@@ -494,7 +493,7 @@ def agregar_producto():
             if resultado_categoria:
                 categoria_id = resultado_categoria[0]
             else:
-                return f"{prefijo}-001" 
+                return f"{prefijo}-001"
         except mysql.connector.Error as err:
             messagebox.showerror("Error al obtener CategoriaID", f"Error: {err}")
             return f"{prefijo}-001"
@@ -532,13 +531,13 @@ def agregar_producto():
             return f"{prefijo}-{ultimo_numero + 1:03d}"
 
     def agregar():
-        producto_nombre = entry_producto.get().strip() 
+        producto_nombre = entry_producto.get().strip()
         categoria_nombre = categoria_var.get().strip()
-        entrada_cantidad_str = entry_entrada.get().strip() 
+        entrada_cantidad_str = entry_entrada.get().strip()
         unidad_medida = unidad_medida_var.get().strip()
-        fecha_entrada_str = entry_fecha_entrada.get().strip() 
+        fecha_entrada_str = entry_fecha_entrada.get().strip()
 
-        # --- VALIDACIÓN DE CAMPOS ---
+        
         if not producto_nombre:
             messagebox.showwarning("Campos Incompletos", "Por favor, ingrese el nombre del producto.")
             return
@@ -548,7 +547,7 @@ def agregar_producto():
         if not entrada_cantidad_str:
             messagebox.showwarning("Campos Incompletos", "Por favor, ingrese la cantidad de entrada.")
             return
-        if not unidad_medida or unidad_medida == "Añadir nueva": 
+        if not unidad_medida or unidad_medida == "Añadir nueva":
             messagebox.showwarning("Campos Incompletos", "Por favor, seleccione o añada una unidad de medida válida.")
             return
         if not fecha_entrada_str:
@@ -557,7 +556,7 @@ def agregar_producto():
 
         
         try:
-            entrada_cantidad = int(entrada_cantidad_str)
+            entrada_cantidad = float(entrada_cantidad_str)
             if entrada_cantidad <= 0:
                 messagebox.showwarning("Cantidad Inválida", "La cantidad de entrada debe ser un número positivo.")
                 return
@@ -565,25 +564,23 @@ def agregar_producto():
             messagebox.showwarning("Cantidad Inválida", "La cantidad de entrada debe ser un número entero válido.")
             return
 
-       
+        
         try:
-           
             fecha_entrada = datetime.datetime.strptime(fecha_entrada_str, "%Y-%m-%d")
         except ValueError:
             messagebox.showwarning("Fecha Inválida", "El formato de la fecha debe ser AAAA-MM-DD (ej. 2025-05-26).")
             return
 
         
-
         codigo_producto = generar_codigo(categoria_nombre)
 
         mydb = conectar_mysql()
         if not mydb:
-            
             return
 
         cursor = mydb.cursor()
 
+        
         query_categoria_id = "SELECT CategoriaID FROM categorias WHERE NombreCategoria = %s"
         categoria_id = None
         try:
@@ -592,7 +589,6 @@ def agregar_producto():
             if resultado_categoria:
                 categoria_id = resultado_categoria[0]
             else:
-            
                 messagebox.showerror("Error", f"La categoría '{categoria_nombre}' no existe en la base de datos.")
                 mydb.close()
                 return
@@ -601,7 +597,30 @@ def agregar_producto():
             mydb.close()
             return
 
-        destino_entrada_nombre = "Almacén principal" 
+        
+        query_verificar_producto = """
+            SELECT COUNT(*)
+            FROM productos
+            WHERE Nombre = %s AND CategoriaID = %s AND UnidadMedida = %s
+        """
+        try:
+            cursor.execute(query_verificar_producto, (producto_nombre, categoria_id, unidad_medida))
+            count = cursor.fetchone()[0]
+            if count > 0:
+                messagebox.showerror(
+                    "Error de Duplicado",
+                    f"Ya existe un producto con el nombre '{producto_nombre}', categoría '{categoria_nombre}' "
+                    f"y unidad de medida '{unidad_medida}'.\n"
+                    "Por favor, elija un nombre, categoría o unidad de medida diferente o actualice el producto existente."
+                )
+                mydb.close()
+                return 
+        except mysql.connector.Error as err:
+            messagebox.showerror("Error de base de datos", f"Error al verificar producto existente: {err}")
+            mydb.close()
+            return
+
+        destino_entrada_nombre = "Almacén principal"
 
         sql_producto = """
             INSERT INTO productos (Codigo, Nombre, CategoriaID, Stock, UnidadMedida, FechaEntrada)
@@ -621,7 +640,15 @@ def agregar_producto():
 
             mydb.commit()
             messagebox.showinfo("Producto Agregado", f"Producto '{producto_nombre}' agregado al inventario con código: {codigo_producto}, Fecha de entrada: {fecha_entrada}, Destino: {destino_entrada_nombre}")
-            ventana_agregar.destroy()
+
+           
+            entry_producto.delete(0, tk.END)
+            entry_entrada.delete(0, tk.END)
+            entry_fecha_entrada.delete(0, tk.END)
+            
+            categoria_var.set("")
+            unidad_medida_var.set("")
+
 
         except mysql.connector.Error as err:
             mydb.rollback()
@@ -630,7 +657,9 @@ def agregar_producto():
             if mydb and mydb.is_connected():
                 cursor.close()
                 mydb.close()
+
     def agregar_categoria_predeterminada_a_db(nombre_categoria):
+        """Agrega una categoría a la DB si no existe."""
         mydb = conectar_mysql()
         if mydb:
             cursor = mydb.cursor()
@@ -642,102 +671,258 @@ def agregar_producto():
                     cursor.execute(sql_insertar, (nombre_categoria.upper(),))
                     mydb.commit()
                     print(f"Categoría '{nombre_categoria}' agregada a la base de datos.")
-                else:
-                    print(f"Categoría '{nombre_categoria}' ya existe en la base de datos.")
+                
             except mysql.connector.Error as err:
                 mydb.rollback()
                 messagebox.showerror("Error", f"Error al agregar categoría '{nombre_categoria}': {err}")
             finally:
-                cursor.close()
-                mydb.close()
+                if cursor:
+                    cursor.close()
+                if mydb and mydb.is_connected():
+                    mydb.close()
+
+ 
+    def agregar_unidad_predeterminada_a_db(nombre_unidad):
+        """Agrega una unidad de medida a la DB si no existe."""
+        mydb = conectar_mysql()
+        if mydb:
+            cursor = mydb.cursor()
+            try:
+                sql_verificar = "SELECT UnidadID FROM unidades_medida WHERE NombreUnidad = %s"
+                cursor.execute(sql_verificar, (nombre_unidad,))
+                if not cursor.fetchone():
+                    sql_insertar = "INSERT INTO unidades_medida (NombreUnidad) VALUES (%s)"
+                    cursor.execute(sql_insertar, (nombre_unidad,))
+                    mydb.commit()
+                    print(f"Unidad de medida '{nombre_unidad}' agregada a la base de datos.")
+                
+            except mysql.connector.Error as err:
+                mydb.rollback()
+                messagebox.showerror("Error", f"Error al agregar unidad de medida '{nombre_unidad}': {err}")
+            finally:
+                if cursor:
+                    cursor.close()
+                if mydb and mydb.is_connected():
+                    mydb.close()
+
 
     def agregar_nueva_categoria():
         def guardar_nueva():
             nueva_cat = nueva_categoria_entry.get().strip().upper()
-            if nueva_cat and nueva_cat not in categorias_list:
-                mydb = conectar_mysql()
-                if mydb:
-                    cursor = mydb.cursor()
-                    try:
-                        sql_insertar_categoria = "INSERT INTO categorias (NombreCategoria) VALUES (%s)"
-                        cursor.execute(sql_insertar_categoria, (nueva_cat,))
-                        mydb.commit()
-                        categorias_list.insert(len(categorias_list) - 1, nueva_cat) 
-                        categorias_var.set(categorias_list)
-                        combo_categoria['values'] = categorias_list
-                        categoria_var.set(nueva_cat) 
-                        ventana_nueva_categoria.destroy()
-                    except mysql.connector.Error as err:
-                        mydb.rollback()
-                        messagebox.showerror("Error al guardar categoría", f"Error: {err}")
-                    finally:
-                        cursor.close()
-                        mydb.close()
+            if nueva_cat:
+                if nueva_cat not in categorias_list: 
+                    mydb = conectar_mysql()
+                    if mydb:
+                        cursor = mydb.cursor()
+                        try:
+                            
+                            sql_insertar_categoria = "INSERT INTO categorias (NombreCategoria) VALUES (%s)"
+                            cursor.execute(sql_insertar_categoria, (nueva_cat,))
+                            mydb.commit()
+
+                            
+                            categorias_list.insert(len(categorias_list) - 1, nueva_cat)
+                            combo_categoria['values'] = categorias_list
+                            categoria_var.set(nueva_cat) 
+                            ventana_nueva_categoria.destroy()
+                            messagebox.showinfo("Categoría Agregada", f"Categoría '{nueva_cat}' agregada exitosamente.")
+                        except mysql.connector.Error as err:
+                            mydb.rollback()
+                            if "Duplicate entry" in str(err): 
+                                messagebox.showerror("Error al guardar categoría", f"La categoría '{nueva_cat}' ya existe en la base de datos.")
+                                
+                                recargar_listas_categorias_y_unidades()
+                                categoria_var.set(nueva_cat) 
+                                ventana_nueva_categoria.destroy()
+                            else:
+                                messagebox.showerror("Error al guardar categoría", f"Error: {err}")
+                        finally:
+                            if cursor:
+                                cursor.close()
+                            if mydb and mydb.is_connected():
+                                mydb.close()
+                    else:
+                        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
                 else:
-                    messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+                    messagebox.showwarning("Advertencia", "La categoría ingresada ya existe en la lista.")
+                    categoria_var.set(nueva_cat) 
+                    ventana_nueva_categoria.destroy()
             else:
-                messagebox.showerror("Error", "Por favor, ingrese una categoría válida que no exista.")
+                messagebox.showwarning("Advertencia", "Por favor, ingrese un nombre para la nueva categoría.")
 
         ventana_nueva_categoria = tk.Toplevel(ventana_agregar)
         ventana_nueva_categoria.title("Nueva Categoría")
+        ventana_nueva_categoria.transient(ventana_agregar)
+        ventana_nueva_categoria.grab_set()
         ttk.Label(ventana_nueva_categoria, text="Ingrese la nueva categoría:", style="CustomLabel.TLabel").pack(padx=10, pady=10)
         nueva_categoria_entry = ttk.Entry(ventana_nueva_categoria, style="CustomEntry.TEntry")
         nueva_categoria_entry.pack(padx=10, pady=5)
         ttk.Button(ventana_nueva_categoria, text="Guardar", command=guardar_nueva, style="CustomButton.TButton").pack(pady=10)
+        ventana_nueva_categoria.wait_window() 
 
     def agregar_nueva_unidad():
         def guardar_nueva_unidad():
             nueva_unidad = nueva_unidad_entry.get().strip()
-            if nueva_unidad and nueva_unidad not in unidades_list:
-                unidades_list.insert(len(unidades_list) - 1, nueva_unidad)
-                unidades_medida_var.set(unidades_list)
-                combo_unidad_medida['values'] = unidades_list
-                unidad_medida_var.set(nueva_unidad)
-                ventana_nueva_unidad.destroy()
+            if nueva_unidad:
+                if nueva_unidad not in unidades_list:
+                    mydb = conectar_mysql()
+                    if mydb:
+                        cursor = mydb.cursor()
+                        try:
+                            
+                            sql_insertar_unidad = "INSERT INTO unidades_medida (NombreUnidad) VALUES (%s)"
+                            cursor.execute(sql_insertar_unidad, (nueva_unidad,))
+                            mydb.commit()
+
+                           
+                            unidades_list.insert(len(unidades_list) - 1, nueva_unidad)
+                            combo_unidad_medida['values'] = unidades_list
+                            unidad_medida_var.set(nueva_unidad) 
+                            ventana_nueva_unidad.destroy()
+                            messagebox.showinfo("Unidad de Medida Agregada", f"Unidad de medida '{nueva_unidad}' agregada exitosamente.")
+                        except mysql.connector.Error as err:
+                            mydb.rollback()
+                            if "Duplicate entry" in str(err): 
+                                messagebox.showerror("Error al guardar unidad", f"La unidad de medida '{nueva_unidad}' ya existe en la base de datos.")
+                               
+                                recargar_listas_categorias_y_unidades()
+                                unidad_medida_var.set(nueva_unidad)
+                                ventana_nueva_unidad.destroy()
+                            else:
+                                messagebox.showerror("Error al guardar unidad", f"Error: {err}")
+                        finally:
+                            if cursor:
+                                cursor.close()
+                            if mydb and mydb.is_connected():
+                                mydb.close()
+                    else:
+                        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+                else:
+                    messagebox.showwarning("Advertencia", "La unidad de medida ingresada ya existe en la lista.")
+                    unidad_medida_var.set(nueva_unidad) 
+                    ventana_nueva_unidad.destroy()
             else:
-                messagebox.showerror("Error", "Por favor, ingrese una unidad de medida válida que no exista.")
+                messagebox.showwarning("Advertencia", "Por favor, ingrese un nombre para la nueva unidad de medida.")
+
 
         ventana_nueva_unidad = tk.Toplevel(ventana_agregar)
         ventana_nueva_unidad.title("Nueva Unidad de Medida")
+        ventana_nueva_unidad.transient(ventana_agregar)
+        ventana_nueva_unidad.grab_set()
         ttk.Label(ventana_nueva_unidad, text="Ingrese la nueva unidad de medida:", style="CustomLabel.TLabel").pack(padx=10, pady=10)
         nueva_unidad_entry = ttk.Entry(ventana_nueva_unidad, style="CustomEntry.TEntry")
         nueva_unidad_entry.pack(padx=10, pady=5)
         ttk.Button(ventana_nueva_unidad, text="Guardar", command=guardar_nueva_unidad, style="CustomButton.TButton").pack(pady=10)
+        ventana_nueva_unidad.wait_window() 
+
+
+    def cargar_categorias_desde_db():
+        """Carga las categorías desde la base de datos."""
+        mydb = conectar_mysql()
+        categorias = []
+        if mydb:
+            cursor = mydb.cursor()
+            try:
+                cursor.execute("SELECT NombreCategoria FROM categorias ORDER BY NombreCategoria")
+                for (nombre,) in cursor:
+                    categorias.append(nombre)
+            except mysql.connector.Error as err:
+                messagebox.showerror("Error DB", f"Error al cargar categorías: {err}")
+            finally:
+                if cursor:
+                    cursor.close()
+                if mydb and mydb.is_connected():
+                    mydb.close()
+        return categorias
+
+    def cargar_unidades_desde_db():
+        """Carga las unidades de medida desde la base de datos."""
+        mydb = conectar_mysql()
+        unidades = []
+        if mydb:
+            cursor = mydb.cursor()
+            try:
+                cursor.execute("SELECT NombreUnidad FROM unidades_medida ORDER BY NombreUnidad")
+                for (nombre,) in cursor:
+                    unidades.append(nombre)
+            except mysql.connector.Error as err:
+                messagebox.showerror("Error DB", f"Error al cargar unidades de medida: {err}")
+            finally:
+                if cursor:
+                    cursor.close()
+                if mydb and mydb.is_connected():
+                    mydb.close()
+        return unidades
+
+    def recargar_listas_categorias_y_unidades():
+        """Recarga ambas listas y actualiza los Comboboxes."""
+        global categorias_list, unidades_list 
+        categorias_list = cargar_categorias_desde_db()
+        unidades_list = cargar_unidades_desde_db()
+
+        
+        if "Añadir nueva" not in categorias_list:
+            categorias_list.append("Añadir nueva")
+        if "Añadir nueva" not in unidades_list:
+            unidades_list.append("Añadir nueva")
+
+        combo_categoria['values'] = categorias_list
+        combo_unidad_medida['values'] = unidades_list
+
+       
+        if categoria_var.get() not in categorias_list:
+            categoria_var.set(categorias_list[0] if categorias_list else "")
+        if unidad_medida_var.get() not in unidades_list:
+            unidad_medida_var.set(unidades_list[0] if unidades_list else "")
+
 
     def mostrar_opciones_categoria(event):
         if categoria_var.get() == "Añadir nueva":
             agregar_nueva_categoria()
-            categoria_var.set(categorias_list[0] if categorias_list and categorias_list[-1] == "Añadir nueva" else "") # Resetear la selección
+            
 
     def mostrar_opciones_unidad(event):
         if unidad_medida_var.get() == "Añadir nueva":
             agregar_nueva_unidad()
-            unidad_medida_var.set(unidades_list[0] if unidades_list and unidades_list[-1] == "Añadir nueva" else "") # Resetear la selección
+            
+
 
     ventana_agregar = tk.Toplevel(ventana)
     ventana_agregar.title("Agregar Producto")
     ventana_agregar.configure(bg="#000080")
+    ventana_agregar.grab_set() 
+    ventana_agregar.transient(ventana) 
+
+  
+    categorias_predeterminadas_inicial = ["COMIDA", "MATERIALES Y ARTICULOS DE OFICINA", "TONNER", "MATERIAL DE LIMPIEZA", "PLASTICO", "MATERIAL DE FERRETERIA", "OTROS"]
+    for cat in categorias_predeterminadas_inicial:
+        agregar_categoria_predeterminada_a_db(cat)
+
+    unidades_medida_predeterminadas_inicial = ["Unidad", "Litro", "Kilogramo", "Metro", "Caja", "Paquete"]
+    for uni in unidades_medida_predeterminadas_inicial:
+        agregar_unidad_predeterminada_a_db(uni)
 
     
-    categorias_predeterminadas = ["COMIDA", "MATERIALES Y ARTICULOS DE OFICINA", "TONNER", "MATERIAL DE LIMPIEZA", "PLASTICO", "MATERIAL DE FERRETERIA", "OTROS", "Añadir nueva"]
-    unidades_medida_predeterminadas = ["Unidad", "Litro", "Kilogramo", "Metro", "Caja", "Paquete", "Añadir nueva"]
+    categorias_list = cargar_categorias_desde_db()
+    unidades_list = cargar_unidades_desde_db()
+
+   
+    if "Añadir nueva" not in categorias_list:
+        categorias_list.append("Añadir nueva")
+    if "Añadir nueva" not in unidades_list:
+        unidades_list.append("Añadir nueva")
+
 
     
-    for cat in categorias_predeterminadas:
-        if cat != "Añadir nueva":
-            agregar_categoria_predeterminada_a_db(cat)
-
-    
-    categorias_var = tk.StringVar()
-    unidades_medida_var = tk.StringVar()
     categoria_var = tk.StringVar()
     unidad_medida_var = tk.StringVar()
-    categorias_list = sorted(categorias_predeterminadas)
-    unidades_list = sorted(unidades_medida_predeterminadas)
-    categorias_var.set(categorias_list[0] if categorias_list else "")
-    unidades_medida_var.set(unidades_list[0] if unidades_list else "")
+
+    categoria_var.set(categorias_list[0] if categorias_list else "")
+    unidad_medida_var.set(unidades_list[0] if unidades_list else "")
+
 
     def abrir_calendario_local():
+       
         abrir_calendario(ventana_agregar, entry_fecha_entrada)
 
     style = ttk.Style(ventana_agregar)
@@ -753,13 +938,14 @@ def agregar_producto():
     entry_producto.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
     ttk.Label(ventana_agregar, text="Categoría del producto:", style="CustomLabel.TLabel").grid(row=1, column=0, sticky="w", padx=10, pady=10)
-    combo_categoria = ttk.Combobox(ventana_agregar, textvariable=categoria_var, values=categorias_list, style="TCombobox")
+    combo_categoria = ttk.Combobox(ventana_agregar, textvariable=categoria_var, values=categorias_list, style="TCombobox", state="readonly") # Hazlo readonly
     combo_categoria.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
     combo_categoria.bind("<<ComboboxSelected>>", mostrar_opciones_categoria)
 
     ttk.Label(ventana_agregar, text="Destino de entrada:", style="CustomLabel.TLabel").grid(row=2, column=0, sticky="w", padx=10, pady=10)
     entry_destino_entrada = ttk.Entry(ventana_agregar, style="CustomEntry.TEntry")
     entry_destino_entrada.insert(0, "Almacén principal")
+    entry_destino_entrada.config(state="readonly")
     entry_destino_entrada.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
 
     ttk.Label(ventana_agregar, text="Cantidad de entrada:", style="CustomLabel.TLabel").grid(row=3, column=0, sticky="w", padx=10, pady=10)
@@ -767,7 +953,7 @@ def agregar_producto():
     entry_entrada.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
 
     ttk.Label(ventana_agregar, text="Unidad de medida:", style="CustomLabel.TLabel").grid(row=4, column=0, sticky="w", padx=10, pady=10)
-    combo_unidad_medida = ttk.Combobox(ventana_agregar, textvariable=unidad_medida_var, values=unidades_list, style="TCombobox")
+    combo_unidad_medida = ttk.Combobox(ventana_agregar, textvariable=unidad_medida_var, values=unidades_list, style="TCombobox", state="readonly") # Hazlo readonly
     combo_unidad_medida.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
     combo_unidad_medida.bind("<<ComboboxSelected>>", mostrar_opciones_unidad)
 
@@ -779,6 +965,7 @@ def agregar_producto():
     ttk.Button(ventana_agregar, text="Agregar", command=agregar, style="CustomButton.TButton").grid(row=6, column=0, columnspan=3, pady=15, padx=10, sticky="ew")
 
     ventana_agregar.grid_columnconfigure(1, weight=1)
+    ventana_agregar.wait_window() 
 
 
 
@@ -848,7 +1035,7 @@ def realizar_salida():
         seleccion_producto = combo_producto.get()
         
         try:
-            cantidad = int(entry_cantidad.get())
+            cantidad = float(entry_cantidad.get())
             if cantidad <= 0:
                 messagebox.showerror("Error", "La cantidad debe ser un número positivo.")
                 return
@@ -900,7 +1087,7 @@ def realizar_salida():
             cursor.execute(sql_insert_salida, val_salida)
             mydb.commit()
             messagebox.showinfo("Salida en Espera", f"{cantidad} unidades de '{producto_nombre}' (código: {codigo_producto}) solicitadas para {departamento_nombre_seleccionado}. Agregado a la lista de espera.")
-            ventana_salida_espera.destroy()
+            entry_cantidad.delete(0, tk.END)
             
          
 
@@ -1183,7 +1370,7 @@ def mostrar_inventario(ventana):
             if not cantidad_str.isdigit():
                 messagebox.showerror("Error", "La cantidad debe ser un número.")
                 return
-            cantidad = int(cantidad_str)
+            cantidad = float(cantidad_str)
 
             mydb = conectar_mysql()
             if not mydb:
@@ -1194,7 +1381,8 @@ def mostrar_inventario(ventana):
 
             try:
                 
-                sql_actualizar_stock = "UPDATE productos SET Stock = Stock + %s, FechaEntrada = %s WHERE Codigo = %s"
+                
+                sql_actualizar_stock = "UPDATE productos SET Stock = Stock + %s, FechaEntrada = %s WHERE Codigo = %s "
                 val_actualizar_stock = (cantidad, fecha, codigo_producto_seleccionado)
                 cursor.execute(sql_actualizar_stock, val_actualizar_stock)
 
@@ -1271,7 +1459,7 @@ def mostrar_inventario(ventana):
             if not cantidad_str.isdigit():
                 messagebox.showerror("Error", "Cantidad inválida. Ingrese un número entero.")
                 return
-            cantidad = int(cantidad_str)
+            cantidad = float(cantidad_str)
 
             if not departamento_nombre or not fecha or not numero_requisicion:
                 messagebox.showerror("Error", "Por favor, complete todos los campos.")
@@ -1357,33 +1545,7 @@ def mostrar_inventario(ventana):
         ttk.Button(ventana_salida, text="Confirmar Salida", command=confirmar_salida, style="CustomButton.TButton").grid(row=4, column=0, columnspan=3, pady=15, padx=10, sticky="ew")
         ventana_salida.grid_columnconfigure(1, weight=1)
 
-    def eliminar_producto_contextual(codigo_producto_seleccionado, nombre_producto):
-            """Elimina un producto del inventario desde el menú contextual usando el código (actualizado para MySQL)."""
-            if codigo_producto_seleccionado:
-                if messagebox.askyesno("Eliminar Producto", f"¿Seguro que desea eliminar '{nombre_producto}' (Código: {codigo_producto_seleccionado}) del inventario?"):
-                    mydb = conectar_mysql()
-                    if not mydb:
-                        messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
-                        return
-
-                    cursor = mydb.cursor()
-                    try:
-                        sql_eliminar = "DELETE FROM productos WHERE Codigo = %s"
-                        val_eliminar = (codigo_producto_seleccionado,)
-                        cursor.execute(sql_eliminar, val_eliminar)
-                        mydb.commit()
-                        mostrar_tabla(categoria_seleccionada_mostrar.get())
-                        messagebox.showinfo("Producto Eliminado", f"Producto '{nombre_producto}' (Código: {codigo_producto_seleccionado}) eliminado del inventario.")
-                    except mysql.connector.Error as err:
-                        mydb.rollback()
-                        messagebox.showerror("Error al eliminar producto", f"Error: {err}")
-                    finally:
-                        if mydb and mydb.is_connected():
-                            cursor.close()
-                            mydb.close()
-            else:
-                messagebox.showerror("Error", "No se proporcionó el código del producto para eliminar.")
-
+    
      
     def menu_contextual(event):
         
@@ -1398,7 +1560,7 @@ def mostrar_inventario(ventana):
                 menu = tk.Menu(ventana_inventario, tearoff=0)
                 menu.add_command(label="Realizar Entrada", command=lambda c=codigo_producto, n=nombre_producto: realizar_entrada_contextual(c, n))
                 menu.add_command(label="Realizar Salida", command=lambda c=codigo_producto, n=nombre_producto: realizar_salida_contextual(c, n))
-                menu.add_command(label="Eliminar Producto", command=lambda c=codigo_producto, n=nombre_producto: eliminar_producto_contextual(c, n))
+               
                 menu.post(event.x_root, event.y_root)
         else:
            
@@ -1416,20 +1578,21 @@ def mostrar_inventario(ventana):
 
                          #MUESTRA EL CONSUMO QUE A TENIDO CADA DEPARTAMENTO
 def calcular_consumo_departamento():
-    """Calcula el consumo diario, semanal y mensual por departamento y en general desde la base de datos."""
-    consumo_diario = calcular_consumo_periodo(datetime.timedelta(days=1))
+    """Calcula el consumo semanal y mensual por departamento y en general desde la base de datos."""
+   
+    
     consumo_semanal = calcular_consumo_periodo(datetime.timedelta(weeks=1))
     consumo_mensual = calcular_consumo_periodo(datetime.timedelta(days=30))
 
-    mostrar_consumo_periodos(consumo_diario, consumo_semanal, consumo_mensual)
+    
+    mostrar_consumo_periodos(consumo_semanal, consumo_mensual)
 
-def mostrar_consumo_periodos(consumo_diario, consumo_semanal, consumo_mensual):
-    """Muestra el consumo para los tres períodos en una tabla."""
+def mostrar_consumo_periodos(consumo_semanal, consumo_mensual):
+    """Muestra el consumo para los dos períodos en una tabla (Semanal y Mensual)."""
     ventana_consumo = tk.Toplevel(ventana)
     ventana_consumo.title("Consumo por Período")
     ventana_consumo.configure(bg="#A9A9A9")
 
-   
     style = ttk.Style(ventana_consumo)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -1437,16 +1600,15 @@ def mostrar_consumo_periodos(consumo_diario, consumo_semanal, consumo_mensual):
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
 
-   
-    tabla_consumo = ttk.Treeview(ventana_consumo, columns=("Departamento", "Código", "Producto", "Diario", "Semanal", "Mensual", "Unidad Medida", "Porcentaje"), show="headings", style="Grid.Treeview")
+    
+    tabla_consumo = ttk.Treeview(ventana_consumo, columns=("Departamento", "Código", "Producto", "Semanal", "Mensual", "Unidad Medida", "Porcentaje"), show="headings", style="Grid.Treeview")
     tabla_consumo.pack(fill=tk.BOTH, expand=True)
 
-    
+   
     tabla_consumo.heading("Departamento", text="Departamento", anchor=tk.W)
     tabla_consumo.heading("Código", text="Código", anchor=tk.W)
     tabla_consumo.heading("Producto", text="Producto", anchor=tk.W)
-    tabla_consumo.heading("Diario", text="Diario", anchor=tk.W)
-    tabla_consumo.heading("Semanal", text="Semanal", anchor=tk.W)
+    tabla_consumo.heading("Semanal", text="Semanal", anchor=tk.W) 
     tabla_consumo.heading("Mensual", text="Mensual", anchor=tk.W)
     tabla_consumo.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
     tabla_consumo.heading("Porcentaje", text="Porcentaje", anchor=tk.W)
@@ -1455,62 +1617,62 @@ def mostrar_consumo_periodos(consumo_diario, consumo_semanal, consumo_mensual):
     tabla_consumo.column("Departamento", width=150)
     tabla_consumo.column("Código", width=100)
     tabla_consumo.column("Producto", width=150)
-    tabla_consumo.column("Diario", width=80)
-    tabla_consumo.column("Semanal", width=80)
-    tabla_consumo.column("Mensual", width=80)
+    tabla_consumo.column("Semanal", width=80) 
+    tabla_consumo.column("Mensual", width=80) 
     tabla_consumo.column("Unidad Medida", width=100)
     tabla_consumo.column("Porcentaje", width=100)
 
-   
-    datos_consumo_guardar = []
+    datos_consumo_guardar = [] 
 
-   
     departamentos = set()
     codigos_consumidos = set()
     consumo_total_general = 0
 
-    for periodo_consumo, total_periodo in [consumo_diario, consumo_semanal, consumo_mensual]:
-        if periodo_consumo:
-            departamentos.update(periodo_consumo.keys())
-            for productos_departamento in periodo_consumo.values():
+   
+    for periodo_data, total_periodo in [consumo_semanal, consumo_mensual]:
+        if periodo_data: 
+            departamentos.update(periodo_data.keys())
+            for productos_departamento in periodo_data.values():
                 codigos_consumidos.update(productos_departamento.keys())
-                consumo_total_general += total_periodo
+            consumo_total_general += total_periodo 
 
     mydb = conectar_mysql()
     if mydb:
         cursor = mydb.cursor()
         for departamento in sorted(list(departamentos)):
             for codigo in sorted(list(codigos_consumidos)):
-                diario = consumo_diario[0].get(departamento, {}).get(codigo, 0)
+               
                 semanal = consumo_semanal[0].get(departamento, {}).get(codigo, 0)
                 mensual = consumo_mensual[0].get(departamento, {}).get(codigo, 0)
 
-                
+               
                 cursor.execute("SELECT Nombre, UnidadMedida FROM productos WHERE Codigo = %s", (codigo,))
                 producto_info = cursor.fetchone()
                 nombre_producto = producto_info[0] if producto_info else "N/A"
                 unidad_medida = producto_info[1] if producto_info else "N/A"
 
                
-                total_consumo_producto = diario + semanal + mensual
+                total_consumo_producto = semanal + mensual 
 
                 
                 porcentaje = (total_consumo_producto / consumo_total_general) * 100 if consumo_total_general > 0 else 0
 
-                values = (departamento, codigo, nombre_producto, diario, semanal, mensual, unidad_medida, f"{porcentaje:.2f}%")
+                
+                values = (departamento, codigo, nombre_producto, semanal, mensual, unidad_medida, f"{porcentaje:.2f}%")
                 tabla_consumo.insert("", tk.END, values=values)
         cursor.close()
         mydb.close()
 
 
 def calcular_consumo_periodo(periodo):
-    """Calcula el consumo para un período específico desde la base de datos MySQL, utilizando el código del producto como clave."""
+    """Calcula el consumo para un período específico desde la base de datos MySQL,
+       utilizando el código del producto como clave, solo desde la tabla de salidas.
+    """
     consumo_departamentos = {}
     total_consumo = 0
     fecha_actual = datetime.date.today()
     fecha_inicio = fecha_actual - periodo
     
-
     mydb = conectar_mysql()
     if mydb:
         cursor = mydb.cursor()
@@ -1518,7 +1680,7 @@ def calcular_consumo_periodo(periodo):
             SELECT d.NombreDepartamento, s.CodigoProducto, s.Cantidad, s.FechaSalida, p.UnidadMedida, p.Nombre
             FROM salidas s
             JOIN productos p ON s.ProductoID = p.ProductoID
-            JOIN departamentos d ON s.DepartamentoID = d.DepartamentoID -- Agregamos el JOIN con la tabla departamentos
+            JOIN departamentos d ON s.DepartamentoID = d.DepartamentoID
             WHERE s.FechaSalida BETWEEN %s AND %s
         """
         val = (fecha_inicio, fecha_actual)
@@ -1526,7 +1688,7 @@ def calcular_consumo_periodo(periodo):
             cursor.execute(query, val)
             salidas_periodo = cursor.fetchall()
             for nombre_departamento, codigo_producto, cantidad, fecha_salida, unidad_medida, nombre_producto in salidas_periodo:
-               
+                
                 if nombre_departamento not in consumo_departamentos:
                     consumo_departamentos[nombre_departamento] = {}
                 if codigo_producto not in consumo_departamentos[nombre_departamento]:
@@ -1587,7 +1749,7 @@ def generar_reporte_bajo_stock():
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
 
-    umbral_stock_minimo = 1
+    umbral_stock_minimo = 10
     productos_bajo_stock = []
     mydb = conectar_mysql()
     if mydb:
@@ -1640,13 +1802,13 @@ def generar_reporte_bajo_stock():
             
                         #GENERA UNA VENTANA CON TODAS LAS ENTRADAS DE PRODUCTOS
 def generar_reporte_entradas():
-    """Genera un reporte del historial de entradas desde la base de datos MySQL."""
+    """Genera un reporte del historial de entradas desde la base de datos MySQL con búsqueda y filtro por categoría."""
     ventana_reporte = tk.Toplevel(ventana)
     ventana_reporte.title("Reporte de Entradas")
-    ventana_reporte.geometry("800x500")
+    ventana_reporte.geometry("1000x600")
     ventana_reporte.configure(bg="#A9A9A9")
 
-   
+    
     style = ttk.Style(ventana_reporte)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -1654,205 +1816,158 @@ def generar_reporte_entradas():
     style.configure("Grid.Treeview", foreground="#000000", background="#ffffff", font=("Segoe UI", 10))
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
+    style.configure("TCombobox", foreground="#000000", background="#ffffff", fieldbackground="#ffffff", insertcolor="#000000", font=("Segoe UI", 10))
+
+
+    
+    frame_controles = tk.Frame(ventana_reporte, bg="#A9A9A9")
+    frame_controles.pack(pady=10, padx=10, fill=tk.X)
+
+    
+    ttk.Label(frame_controles, text="Buscar:", style="CustomLabel.TLabel").pack(side=tk.LEFT)
+    entry_busqueda = ttk.Entry(frame_controles, style="CustomEntry.TEntry")
+    entry_busqueda.pack(side=tk.LEFT, padx=(0, 10))
 
    
-    tabla_entradas = ttk.Treeview(ventana_reporte, columns=("Código", "Producto", "Cantidad", "Fecha", "Destino", "EntradaID"), show="headings", style="Grid.Treeview")
-    tabla_entradas.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-    tabla_entradas.column("EntradaID", width=0, stretch=tk.NO)
+    categorias_mostrar = ["Todas las categorías"] 
+    mydb = conectar_mysql()
+    if mydb:
+        cursor = mydb.cursor()
+        try:
+            cursor.execute("SELECT NombreCategoria FROM categorias ORDER BY NombreCategoria")
+            categorias_db = [row[0] for row in cursor.fetchall()]
+            categorias_mostrar.extend(categorias_db)
+        except mysql.connector.Error as err:
+            messagebox.showerror("Error de BD", f"Error al cargar categorías: {err}")
+        finally:
+            cursor.close()
+            mydb.close()
 
-   
+    categoria_seleccionada_reporte = tk.StringVar(frame_controles)
+    categoria_seleccionada_reporte.set(categorias_mostrar[0])
+    menu_categorias_reporte = ttk.Combobox(frame_controles,
+                                            textvariable=categoria_seleccionada_reporte,
+                                            values=categorias_mostrar,
+                                            style="TCombobox",
+                                            state="readonly") 
+    menu_categorias_reporte.pack(side=tk.LEFT, padx=(0, 10))
+
+    
+
+
+    
+    frame_tabla_contenedor = tk.Frame(ventana_reporte, bg="#A9A9A9")
+    frame_tabla_contenedor.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    
+    tabla_entradas = ttk.Treeview(frame_tabla_contenedor,
+                                  columns=("Código", "Producto", "Cantidad", "Unidad Medida", "Fecha", "Destino", "EntradaID"),
+                                  show="headings",
+                                  style="Grid.Treeview")
+    tabla_entradas.column("EntradaID", width=0, stretch=tk.NO) 
+
+    
     tabla_entradas.heading("Código", text="Código", anchor=tk.W)
     tabla_entradas.heading("Producto", text="Producto", anchor=tk.W)
     tabla_entradas.heading("Cantidad", text="Cantidad", anchor=tk.W)
+    tabla_entradas.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W) 
     tabla_entradas.heading("Fecha", text="Fecha", anchor=tk.W)
     tabla_entradas.heading("Destino", text="Destino", anchor=tk.W)
 
     
     tabla_entradas.column("Código", width=100)
-    tabla_entradas.column("Producto", width=150)
+    tabla_entradas.column("Producto", width=180) 
     tabla_entradas.column("Cantidad", width=80)
+    tabla_entradas.column("Unidad Medida", width=100) 
     tabla_entradas.column("Fecha", width=100)
     tabla_entradas.column("Destino", width=150)
 
+
     
-    scrollbar_vertical = ttk.Scrollbar(ventana_reporte, orient="vertical", command=tabla_entradas.yview)
-    scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
+    scrollbar_vertical = ttk.Scrollbar(frame_tabla_contenedor, orient="vertical", command=tabla_entradas.yview)
+    scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y) 
     tabla_entradas.configure(yscrollcommand=scrollbar_vertical.set)
 
-    def cargar_entradas():
-        """Carga las entradas desde la base de datos y las muestra en la tabla."""
-        tabla_entradas.delete(*tabla_entradas.get_children())
+    
+    tabla_entradas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True) 
+
+
+    
+    def cargar_entradas(filtro_busqueda="", categoria_filtro="Todas las categorías"):
+        for item in tabla_entradas.get_children(): 
+            tabla_entradas.delete(item)
+
         mydb = conectar_mysql()
-        if mydb:
-            cursor = mydb.cursor()
-            query = """
-                SELECT e.EntradaID, p.Codigo, p.Nombre, e.Cantidad, e.FechaEntrada, e.Destino
-                FROM entradas e
-                JOIN productos p ON e.ProductoID = p.ProductoID
-                ORDER BY e.FechaEntrada DESC
+        if not mydb:
+            messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+            return
+
+        cursor = mydb.cursor()
+        try:
+            sql_query = """
+                SELECT
+                    e.CodigoProducto,
+                    p.Nombre AS NombreProducto,
+                    e.Cantidad,
+                    p.UnidadMedida,  -- <--- Obtenemos la Unidad de Medida del producto
+                   e.FechaEntrada, 
+                    e.Destino,
+                    e.EntradaID
+                FROM
+                    entradas e
+                JOIN
+                    productos p ON e.ProductoID = p.ProductoID
+                JOIN
+                    categorias c ON p.CategoriaID = c.CategoriaID
+                WHERE 1=1
             """
-            try:
-                cursor.execute(query)
-                entradas_db = cursor.fetchall()
-                for entrada_id, codigo, producto, cantidad, fecha, destino in entradas_db:
-                    tabla_entradas.insert("", tk.END, values=(codigo, producto, cantidad, fecha.strftime("%Y-%m-%d"), destino, entrada_id))
-            except mysql.connector.Error as err:
-                messagebox.showerror("Error", f"Error al cargar las entradas: {err}")
-            finally:
+            params = []
+
+            if filtro_busqueda:
+                sql_query += " AND (e.CodigoProducto LIKE %s OR p.Nombre LIKE %s)"
+                params.append(f"%{filtro_busqueda}%")
+                params.append(f"%{filtro_busqueda}%")
+
+            if categoria_filtro and categoria_filtro != "Todas las categorías":
+                sql_query += " AND c.NombreCategoria = %s"
+                params.append(categoria_filtro)
+
+            sql_query += " ORDER BY e.FechaEntrada DESC, e.EntradaID DESC" 
+
+            cursor.execute(sql_query, tuple(params))
+            registros = cursor.fetchall()
+
+            for registro in registros:
+                
+                tabla_entradas.insert("", "end", values=registro)
+
+        except mysql.connector.Error as err:
+            messagebox.showerror("Error de Base de Datos", f"Error al cargar el reporte de entradas: {err}")
+        finally:
+            if mydb and mydb.is_connected():
                 cursor.close()
                 mydb.close()
 
-    cargar_entradas()
-
-    def eliminar_entrada():
-        seleccion = tabla_entradas.selection()
-        if seleccion:
-            item_id = seleccion[0]
-            entrada_id = tabla_entradas.item(item_id, "values")[-1] 
-
-            if messagebox.askyesno("Eliminar Entrada", "¿Seguro que desea eliminar esta entrada?"):
-                mydb = conectar_mysql()
-                if mydb:
-                    cursor = mydb.cursor()
-                    query_eliminar = "DELETE FROM entradas WHERE EntradaID = %s"
-                    try:
-                        cursor.execute(query_eliminar, (entrada_id,))
-                        mydb.commit()
-                        tabla_entradas.delete(item_id)
-                        messagebox.showinfo("Entrada Eliminada", "La entrada ha sido eliminada.")
-                    except mysql.connector.Error as err:
-                        mydb.rollback()
-                        messagebox.showerror("Error", f"Error al eliminar la entrada: {err}")
-                    finally:
-                        cursor.close()
-                        mydb.close()
-        else:
-            messagebox.showerror("Error", "Por favor, seleccione una entrada para eliminar.")
-
-    def editar_entrada():
-        seleccion = tabla_entradas.selection()
-        if seleccion:
-            item_id = seleccion[0]
-            values = tabla_entradas.item(item_id, "values")
-            codigo_actual = values[0]
-            producto_actual = values[1]
-            cantidad_actual = values[2]
-            fecha_actual_str = values[3]
-            destino_actual = values[4]
-            entrada_id = values[5]
-
-            ventana_edicion = tk.Toplevel(ventana_reporte)
-            ventana_edicion.title("Editar Entrada")
-            ventana_edicion.configure(bg="#A9A9A9")
-
-            tk.Label(ventana_edicion, text="Código:", fg="#ffffff", bg="#A9A9A9").grid(row=0, column=0, padx=5, pady=5)
-            entry_codigo = tk.Entry(ventana_edicion)
-            entry_codigo.grid(row=0, column=1, padx=5, pady=5)
-            entry_codigo.insert(0, codigo_actual)
-            entry_codigo.config(state="readonly")
-
-            tk.Label(ventana_edicion, text="Producto:", fg="#ffffff", bg="#A9A9A9").grid(row=1, column=0, padx=5, pady=5)
-            entry_producto = tk.Entry(ventana_edicion)
-            entry_producto.grid(row=1, column=1, padx=5, pady=5)
-            entry_producto.insert(0, producto_actual)
-
-            tk.Label(ventana_edicion, text="Cantidad:", fg="#ffffff", bg="#A9A9A9").grid(row=2, column=0, padx=5, pady=5)
-            entry_cantidad = tk.Entry(ventana_edicion)
-            entry_cantidad.grid(row=2, column=1, padx=5, pady=5)
-            entry_cantidad.insert(0, cantidad_actual)
-
-            tk.Label(ventana_edicion, text="Fecha:", fg="#ffffff", bg="#A9A9A9").grid(row=3, column=0, padx=5, pady=5)
-            entry_fecha = tk.Entry(ventana_edicion)
-            entry_fecha.grid(row=3, column=1, padx=5, pady=5)
-            entry_fecha.insert(0, fecha_actual_str)
-
-            tk.Label(ventana_edicion, text="Destino:", fg="#ffffff", bg="#A9A9A9").grid(row=4, column=0, padx=5, pady=5)
-            entry_destino = tk.Entry(ventana_edicion)
-            entry_destino.grid(row=4, column=1, padx=5, pady=5)
-            entry_destino.insert(0, destino_actual)
-
-            def guardar_cambios_edicion():
-                producto_editado = entry_producto.get()
-                try:
-                    cantidad_editada = int(entry_cantidad.get())
-                except ValueError:
-                    messagebox.showerror("Error", "Cantidad debe ser un número entero.")
-                    return
-                fecha_editada_str = entry_fecha.get()
-                try:
-                    fecha_editada = datetime.datetime.strptime(fecha_editada_str, "%Y-%m-%d").date()
-                except ValueError:
-                    messagebox.showerror("Error", "Formato de fecha incorrecto (YYYY-MM-DD).")
-                    return
-                destino_editado = entry_destino.get()
-
-                mydb = conectar_mysql()
-                if mydb:
-                    cursor = mydb.cursor()
-                    query_actualizar = """
-                        UPDATE entradas
-                        SET ProductoID = (SELECT ProductoID FROM productos WHERE Codigo = %s),
-                            Cantidad = %s,
-                            FechaEntrada = %s,
-                            Destino = %s
-                        WHERE EntradaID = %s
-                    """
-                    try:
-                        cursor.execute(query_actualizar, (codigo_actual, cantidad_editada, fecha_editada, destino_editado, entrada_id))
-                        mydb.commit()
-                        cargar_entradas() 
-                        ventana_edicion.destroy()
-                        messagebox.showinfo("Entrada Editada", "La entrada ha sido actualizada.")
-                    except mysql.connector.Error as err:
-                        mydb.rollback()
-                        messagebox.showerror("Error", f"Error al editar la entrada: {err}")
-                    finally:
-                        cursor.close()
-                        mydb.close()
-
-            ttk.Button(ventana_edicion, text="Guardar", command=guardar_cambios_edicion).grid(row=5, column=0, columnspan=2, pady=10)
-
-    def buscar_producto_abreviatura():
-        """Abre una ventana para buscar producto por abreviatura en las entradas."""
-        ventana_busqueda_abreviatura = tk.Toplevel(ventana_reporte)
-        ventana_busqueda_abreviatura.title("Buscar Producto por Abreviatura en Entradas")
-        ventana_busqueda_abreviatura.configure(bg="#A9A9A9")
-
-        tk.Label(ventana_busqueda_abreviatura, text="Ingrese abreviatura:", fg="#ffffff", bg="#A9A9A9").pack(padx=10, pady=10)
-        entry_abreviatura = ttk.Entry(ventana_busqueda_abreviatura)
-        entry_abreviatura.pack(padx=10, pady=5)
-
-        def filtrar_por_abreviatura(event):
-            abreviatura = entry_abreviatura.get().lower()
-            tabla_entradas.delete(*tabla_entradas.get_children())
-            mydb = conectar_mysql()
-            if mydb:
-                cursor = mydb.cursor()
-                query_buscar = """
-                    SELECT e.EntradaID, p.Codigo, p.Nombre, e.Cantidad, e.FechaEntrada, e.Destino
-                    FROM entradas e
-                    JOIN productos p ON e.ProductoID = p.ProductoID
-                    WHERE LOWER(p.Nombre) LIKE %s
-                    ORDER BY e.FechaEntrada DESC
-                """
-                try:
-                    cursor.execute(query_buscar, (f"%{abreviatura}%",))
-                    entradas_filtradas_db = cursor.fetchall()
-                    for entrada_id, codigo, producto, cantidad, fecha, destino in entradas_filtradas_db:
-                        tabla_entradas.insert("", tk.END, values=(codigo, producto, cantidad, fecha.strftime("%Y-%m-%d"), destino, entrada_id))
-                except mysql.connector.Error as err:
-                    messagebox.showerror("Error", f"Error al buscar por abreviatura: {err}")
-                finally:
-                    cursor.close()
-                    mydb.close()
-
-        entry_abreviatura.bind("<KeyRelease>", filtrar_por_abreviatura)
+    
+    def aplicar_filtro(*args):
+        filtro_busqueda = entry_busqueda.get().strip()
+        categoria_filtro = categoria_seleccionada_reporte.get()
+        cargar_entradas(filtro_busqueda, categoria_filtro)
 
     
-    menu_contextual = tk.Menu(ventana_reporte, tearoff=0)
-    menu_contextual.add_command(label="Eliminar", command=eliminar_entrada)
-    menu_contextual.add_command(label="Editar", command=editar_entrada)
-    menu_contextual.add_command(label="Buscar por Abreviatura", command=buscar_producto_abreviatura)
+    entry_busqueda.bind("<KeyRelease>", aplicar_filtro) 
+    menu_categorias_reporte.bind("<<ComboboxSelected>>", aplicar_filtro)
+
+    
+    cargar_entradas()
+
+    
+    
+
+    
+
+   
+    
 
     
     def mostrar_menu_contextual(event):
@@ -1872,6 +1987,7 @@ def generar_reporte_entradas():
 
   
     tabla_entradas.bind("<Button-3>", mostrar_menu_contextual)
+    ventana_reporte.mainloop()
 
 
 
@@ -1880,7 +1996,7 @@ def generar_reporte_salidas():
     """Genera un reporte del historial de salidas desde la base de datos MySQL."""
     ventana_reporte_salidas = tk.Toplevel(ventana)
     ventana_reporte_salidas.title("Reporte de Salidas")
-    ventana_reporte_salidas.geometry("900x500")
+    ventana_reporte_salidas.geometry("1000x600") 
     ventana_reporte_salidas.configure(bg="#A9A9A9")
 
     
@@ -1891,8 +2007,45 @@ def generar_reporte_salidas():
     style.configure("Grid.Treeview", foreground="#000000", background="#ffffff", font=("Segoe UI", 10))
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
+    style.configure("TCombobox", foreground="#000000", background="#ffffff", fieldbackground="#ffffff", insertcolor="#000000", font=("Segoe UI", 10))
 
-    tree = ttk.Treeview(ventana_reporte_salidas, columns=("Código", "Producto", "Cantidad", "Fecha", "Destino", "Requisición", "SalidaID"), show="headings", style="Grid.Treeview")
+
+    
+    frame_controles_salidas = tk.Frame(ventana_reporte_salidas, bg="#A9A9A9")
+    frame_controles_salidas.pack(pady=10, padx=10, fill=tk.X)
+
+    ttk.Label(frame_controles_salidas, text="Buscar:", style="CustomLabel.TLabel").pack(side=tk.LEFT)
+    entry_busqueda_salidas = ttk.Entry(frame_controles_salidas, style="CustomEntry.TEntry")
+    entry_busqueda_salidas.pack(side=tk.LEFT, padx=(0, 10))
+
+    departamentos_mostrar = ["Todos los departamentos"]
+    mydb = conectar_mysql()
+    if mydb:
+        cursor = mydb.cursor()
+        try:
+            cursor.execute("SELECT NombreDepartamento FROM departamentos ORDER BY NombreDepartamento")
+            departamentos_db = [row[0] for row in cursor.fetchall()]
+            departamentos_mostrar.extend(departamentos_db)
+        except mysql.connector.Error as err:
+            messagebox.showerror("Error de BD", f"Error al cargar departamentos: {err}")
+        finally:
+            cursor.close()
+            mydb.close()
+
+    departamento_seleccionado_reporte = tk.StringVar(frame_controles_salidas)
+    departamento_seleccionado_reporte.set(departamentos_mostrar[0])
+
+    menu_departamentos_reporte = ttk.Combobox(frame_controles_salidas,
+                                            textvariable=departamento_seleccionado_reporte,
+                                            values=departamentos_mostrar,
+                                            style="TCombobox",
+                                            state="readonly")
+    menu_departamentos_reporte.pack(side=tk.LEFT, padx=(0, 10))
+    
+    frame_tabla_contenedor_salidas = tk.Frame(ventana_reporte_salidas, bg="#A9A9A9")
+    frame_tabla_contenedor_salidas.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    tree = ttk.Treeview(frame_tabla_contenedor_salidas, columns=("Código", "Producto", "Cantidad", "Fecha", "Destino", "Requisición", "SalidaID"), show="headings", style="Grid.Treeview")
     tree.heading("Código", text="Código", anchor=tk.W)
     tree.heading("Producto", text="Producto", anchor=tk.W)
     tree.heading("Cantidad", text="Cantidad", anchor=tk.W)
@@ -1900,241 +2053,140 @@ def generar_reporte_salidas():
     tree.heading("Destino", text="Destino", anchor=tk.W)
     tree.heading("Requisición", text="Requisición", anchor=tk.W)
     tree.column("SalidaID", width=0, stretch=tk.NO) 
-    tree.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+    
+    
+    tree.column("Código", width=100)
+    tree.column("Producto", width=180)
+    tree.column("Cantidad", width=80)
+    tree.column("Fecha", width=100)
+    tree.column("Destino", width=150)
+    tree.column("Requisición", width=120)
 
-    scrollbar = ttk.Scrollbar(ventana_reporte_salidas, orient="vertical", command=tree.yview)
+
+    scrollbar = ttk.Scrollbar(frame_tabla_contenedor_salidas, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=scrollbar.set)
-    scrollbar.grid(row=0, column=1, sticky="ns", pady=10)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y) 
 
-    def cargar_salidas():
-        """Carga las salidas desde la base de datos y las muestra en la tabla."""
+    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True) 
+
+
+    def cargar_salidas(filtro_busqueda="", departamento_filtro="Todos los departamentos"):
+        """Carga las salidas desde la base de datos y las muestra en la tabla con filtros."""
         tree.delete(*tree.get_children())
         mydb = conectar_mysql()
-        if mydb:
-            cursor = mydb.cursor()
-            query = """
+        if not mydb:
+            messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
+            return
+
+        cursor = mydb.cursor()
+        try:
+            sql_query = """
                 SELECT s.SalidaID, p.Codigo, p.Nombre, s.Cantidad, s.FechaSalida, d.NombreDepartamento, s.NumeroRequisicion
                 FROM salidas s
                 JOIN productos p ON s.ProductoID = p.ProductoID
-                JOIN departamentos d ON s.DepartamentoID = d.DepartamentoID -- ¡Nueva línea! Agregamos el JOIN con departamentos
-                ORDER BY s.FechaSalida DESC
+                JOIN departamentos d ON s.DepartamentoID = d.DepartamentoID 
+                WHERE 1=1
             """
-            try:
-                cursor.execute(query)
-                salidas_db = cursor.fetchall()
-                for salida_id, codigo, producto, cantidad, fecha, destino, requisicion in salidas_db:
-                   
-                    tree.insert("", "end", values=(codigo, producto, cantidad, fecha.strftime("%Y-%m-%d"), destino, requisicion, salida_id))
-            except mysql.connector.Error as err:
-                messagebox.showerror("Error", f"Error al cargar las salidas: {err}")
-            finally:
+            params = []
+
+            if filtro_busqueda:
+                sql_query += " AND (p.Codigo LIKE %s OR p.Nombre LIKE %s OR s.NumeroRequisicion LIKE %s)"
+                params.append(f"%{filtro_busqueda}%")
+                params.append(f"%{filtro_busqueda}%")
+                params.append(f"%{filtro_busqueda}%")
+
+
+            if departamento_filtro and departamento_filtro != "Todos los departamentos":
+                sql_query += " AND d.NombreDepartamento = %s"
+                params.append(departamento_filtro)
+
+            sql_query += " ORDER BY s.FechaSalida DESC, s.SalidaID DESC"
+
+            cursor.execute(sql_query, tuple(params))
+            salidas_db = cursor.fetchall()
+            for salida_id, codigo, producto, cantidad, fecha, destino_nombre, requisicion in salidas_db:
+                tree.insert("", "end", values=(codigo, producto, cantidad, fecha.strftime("%Y-%m-%d"), destino_nombre, requisicion, salida_id))
+        except mysql.connector.Error as err:
+            messagebox.showerror("Error", f"Error al cargar las salidas: {err}")
+        finally:
+            if mydb and mydb.is_connected():
                 cursor.close()
                 mydb.close()
 
-    cargar_salidas()
+    
 
-    def eliminar_salida():
-        seleccion = tree.selection()
-        if seleccion:
-            item_id = seleccion[0]
-            salida_id = tree.item(item_id, "values")[-1] 
-
-            if messagebox.askyesno("Eliminar Salida", "¿Seguro que desea eliminar esta salida?"):
-                mydb = conectar_mysql()
-                if mydb:
-                    cursor = mydb.cursor()
-                    query_eliminar = "DELETE FROM salidas WHERE SalidaID = %s"
-                    try:
-                        cursor.execute(query_eliminar, (salida_id,))
-                        mydb.commit()
-                        tree.delete(item_id)
-                        messagebox.showinfo("Salida Eliminada", "La salida ha sido eliminada.")
-                    except mysql.connector.Error as err:
-                        mydb.rollback()
-                        messagebox.showerror("Error", f"Error al eliminar la salida: {err}")
-                    finally:
-                        cursor.close()
-                        mydb.close()
-        else:
-            messagebox.showerror("Error", "Por favor, seleccione una salida para eliminar.")
-
-    def editar_salida():
-        seleccion = tree.selection()
-        if seleccion:
-            item_id = seleccion[0]
-            values = tree.item(item_id, "values")
-            codigo_actual = values[0]
-            producto_actual = values[1]
-            cantidad_actual = values[2]
-            fecha_actual_str = values[3]
-            destino_actual = values[4]
-            requisicion_actual = values[5]
-            salida_id = values[6]
-
-            ventana_edicion = tk.Toplevel(ventana_reporte_salidas)
-            ventana_edicion.title("Editar Salida")
-            ventana_edicion.configure(bg="#A9A9A9")
-
-            tk.Label(ventana_edicion, text="Código:", fg="#ffffff", bg="#A9A9A9").grid(row=0, column=0, padx=5, pady=5)
-            entry_codigo = tk.Entry(ventana_edicion)
-            entry_codigo.grid(row=0, column=1, padx=5, pady=5)
-            entry_codigo.insert(0, codigo_actual)
-            entry_codigo.config(state="readonly")
-
-            tk.Label(ventana_edicion, text="Producto:", fg="#ffffff", bg="#A9A9A9").grid(row=1, column=0, padx=5, pady=5)
-            entry_producto = tk.Entry(ventana_edicion)
-            entry_producto.grid(row=1, column=1, padx=5, pady=5)
-            entry_producto.insert(0, producto_actual)
-
-            tk.Label(ventana_edicion, text="Cantidad:", fg="#ffffff", bg="#A9A9A9").grid(row=2, column=0, padx=5, pady=5)
-            entry_cantidad = tk.Entry(ventana_edicion)
-            entry_cantidad.grid(row=2, column=1, padx=5, pady=5)
-            entry_cantidad.insert(0, cantidad_actual)
-
-            tk.Label(ventana_edicion, text="Fecha:", fg="#ffffff", bg="#A9A9A9").grid(row=3, column=0, padx=5, pady=5)
-            entry_fecha = tk.Entry(ventana_edicion)
-            entry_fecha.grid(row=3, column=1, padx=5, pady=5)
-            entry_fecha.insert(0, fecha_actual_str)
-
-            tk.Label(ventana_edicion, text="Destino:", fg="#ffffff", bg="#A9A9A9").grid(row=4, column=0, padx=5, pady=5)
-            entry_destino = tk.Entry(ventana_edicion)
-            entry_destino.grid(row=4, column=1, padx=5, pady=5)
-            entry_destino.insert(0, destino_actual)
-
-            tk.Label(ventana_edicion, text="Requisición:", fg="#ffffff", bg="#A9A9A9").grid(row=5, column=0, padx=5, pady=5)
-            entry_requisicion = tk.Entry(ventana_edicion)
-            entry_requisicion.grid(row=5, column=1, padx=5, pady=5)
-            entry_requisicion.insert(0, requisicion_actual)
-
-            def guardar_cambios():
-                producto_editado = entry_producto.get()
-                try:
-                    cantidad_editada = int(entry_cantidad.get())
-                except ValueError:
-                    messagebox.showerror("Error", "Cantidad debe ser un número entero.")
-                    return
-                fecha_editada_str = entry_fecha.get()
-                try:
-                    fecha_editada = datetime.datetime.strptime(fecha_editada_str, "%Y-%m-%d").date()
-                except ValueError:
-                    messagebox.showerror("Error", "Formato de fecha incorrecto (YYYY-MM-DD).")
-                    return
-                destino_editado = entry_destino.get()
-                requisicion_editada = entry_requisicion.get()
-
-                mydb = conectar_mysql()
-                if mydb:
-                    cursor = mydb.cursor()
-                    query_actualizar = """
-                        UPDATE salidas
-                        SET ProductoID = (SELECT ProductoID FROM productos WHERE Codigo = %s),
-                            Cantidad = %s,
-                            FechaSalida = %s,
-                            Departamento = %s,
-                            NumeroRequisicion = %s
-                        WHERE SalidaID = %s
-                    """
-                    try:
-                        cursor.execute(query_actualizar, (codigo_actual, cantidad_editada, fecha_editada, destino_editado, requisicion_editada, salida_id))
-                        mydb.commit()
-                        cargar_salidas() 
-                        ventana_edicion.destroy()
-                        messagebox.showinfo("Salida Editada", "La salida ha sido actualizada.")
-                    except mysql.connector.Error as err:
-                        mydb.rollback()
-                        messagebox.showerror("Error", f"Error al editar la salida: {err}")
-                    finally:
-                        cursor.close()
-                        mydb.close()
-
-            ttk.Button(ventana_edicion, text="Guardar", command=guardar_cambios).grid(row=6, column=0, columnspan=2, pady=10)
-
-    def buscar_producto_abreviatura():
-        """Abre una ventana para buscar producto por abreviatura en las salidas."""
-        ventana_busqueda_abreviatura = tk.Toplevel(ventana_reporte_salidas)
-        ventana_busqueda_abreviatura.title("Buscar Producto por Abreviatura en Salidas")
-        ventana_busqueda_abreviatura.configure(bg="#A9A9A9")
-
-        tk.Label(ventana_busqueda_abreviatura, text="Ingrese abreviatura:", fg="#ffffff", bg="#A9A9A9").pack(padx=10, pady=10)
-        entry_abreviatura = ttk.Entry(ventana_busqueda_abreviatura)
-        entry_abreviatura.pack(padx=10, pady=5)
-
-        def filtrar_por_abreviatura(event):
-            abreviatura = entry_abreviatura.get().lower()
-            tree.delete(*tree.get_children())
-            mydb = conectar_mysql()
-            if mydb:
-                cursor = mydb.cursor()
-                query_buscar = """
-                    SELECT s.SalidaID, p.Codigo, p.Nombre, s.Cantidad, s.FechaSalida, s.Departamento, s.NumeroRequisicion
-                    FROM salidas s
-                    JOIN productos p ON s.ProductoID = p.ProductoID
-                    WHERE LOWER(p.Nombre) LIKE %s
-                    ORDER BY s.FechaSalida DESC
-                """
-                try:
-                    cursor.execute(query_buscar, (f"%{abreviatura}%",))
-                    salidas_filtradas_db = cursor.fetchall()
-                    for salida_id, codigo, producto, cantidad, fecha, destino, requisicion in salidas_filtradas_db:
-                        tree.insert("", "end", values=(codigo, producto, cantidad, fecha.strftime("%Y-%m-%d"), destino, requisicion, salida_id))
-                except mysql.connector.Error as err:
-                    messagebox.showerror("Error", f"Error al buscar por abreviatura: {err}")
-                finally:
-                    cursor.close()
-                    mydb.close()
-
-        entry_abreviatura.bind("<KeyRelease>", filtrar_por_abreviatura)
+   
+    
 
     
-    menu_contextual = tk.Menu(ventana_reporte_salidas, tearoff=0)
-    menu_contextual.add_command(label="Eliminar", command=eliminar_salida)
-    menu_contextual.add_command(label="Editar", command=editar_salida)
-    menu_contextual.add_command(label="Buscar por Abreviatura", command=buscar_producto_abreviatura)
-
+    menu_contextual_salidas = tk.Menu(ventana_reporte_salidas, tearoff=0)
     
-    def mostrar_menu_contextual(event):
-        """
-        Muestra el menú contextual de clic derecho solo si el usuario es administrador
-        para el reporte de salidas.
-        """
+    
+    
+    def mostrar_menu_contextual_salidas(event):
         global current_user_role_is_admin 
 
         if current_user_role_is_admin: 
             item = tree.identify_row(event.y)
             if item:
                 tree.selection_set(item)
-                menu_contextual.post(event.x_root, event.y_root)
+                menu_contextual_salidas.post(event.x_root, event.y_root)
         else:
-           
             messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial de salidas.")
+    
+    tree.bind("<Button-3>", mostrar_menu_contextual_salidas)
 
     
-    tree.bind("<Button-3>", mostrar_menu_contextual)
+    def aplicar_filtro_salidas(*args):
+        filtro_busqueda = entry_busqueda_salidas.get().strip()
+        departamento_filtro = departamento_seleccionado_reporte.get()
+        cargar_salidas(filtro_busqueda, departamento_filtro)
 
-   
+    
+    entry_busqueda_salidas.bind("<KeyRelease>", aplicar_filtro_salidas)
+    menu_departamentos_reporte.bind("<<ComboboxSelected>>", aplicar_filtro_salidas)
+
+    
+    cargar_salidas()
+
+    
     ventana_reporte_salidas.grid_columnconfigure(0, weight=1)
-    ventana_reporte_salidas.grid_rowconfigure(0, weight=1)
+    ventana_reporte_salidas.grid_rowconfigure(0, weight=1) 
+
+    ventana_reporte_salidas.mainloop()
 
 tabla_salidas_espera = None
 
 
-def actualizar_tabla_salidas_espera():
-    """Actualiza el contenido de la tabla de salidas en espera desde la base de datos."""
+def actualizar_tabla_salidas_espera(filtro_busqueda=""):
+    """Actualiza el contenido de la tabla de salidas en espera desde la base de datos con filtro."""
     global tabla_salidas_espera
-    if tabla_salidas_espera:
+    
+    if tabla_salidas_espera: 
         tabla_salidas_espera.delete(*tabla_salidas_espera.get_children())
         mydb = conectar_mysql()
         if mydb:
             cursor = mydb.cursor()
             query = """
-                SELECT spe.SalidaEsperaID, p.Codigo, p.Nombre, spe.Cantidad, d.NombreDepartamento -- Cambiado 'spe.Departamento' a 'd.NombreDepartamento'
+                SELECT spe.SalidaEsperaID, p.Codigo, p.Nombre, spe.Cantidad, d.NombreDepartamento
                 FROM salidas_espera spe
                 JOIN productos p ON spe.ProductoID = p.ProductoID
-                JOIN departamentos d ON spe.DepartamentoID = d.DepartamentoID -- ¡Nuevo JOIN para obtener el nombre del departamento!
-                ORDER BY spe.FechaSolicitud DESC -- Agregada para mantener un orden
+                JOIN departamentos d ON spe.DepartamentoID = d.DepartamentoID
+                WHERE 1=1 -- Cláusula siempre verdadera para facilitar la adición de AND
             """
+            params = []
+
+            if filtro_busqueda:
+                query += " AND (p.Codigo LIKE %s OR p.Nombre LIKE %s)"
+                params.append(f"%{filtro_busqueda}%")
+                params.append(f"%{filtro_busqueda}%")
+            
+           
+
+            query += " ORDER BY spe.FechaSolicitud DESC"
+
             try:
-                cursor.execute(query)
+                cursor.execute(query, tuple(params))
                 salidas_espera_db = cursor.fetchall()
                 for espera_id, codigo, producto, cantidad, departamento_nombre in salidas_espera_db: 
                     tabla_salidas_espera.insert("", tk.END, values=(codigo, producto, cantidad, departamento_nombre, espera_id))
@@ -2145,26 +2197,23 @@ def actualizar_tabla_salidas_espera():
                     cursor.close()
                     mydb.close()
 
-
-
-
-                    #GENERA UNA VENTANA CON TODAS LAS SALIDAS PENDIENTES(ESPERA)
-
 def generar_reporte_salidas_espera():
     """Genera o trae al frente la ventana del reporte de salidas en espera desde la base de datos."""
     global ventana_reporte_salidas_espera, tabla_salidas_espera
 
     if ventana_reporte_salidas_espera and ventana_reporte_salidas_espera.winfo_exists():
         ventana_reporte_salidas_espera.lift()
-        actualizar_tabla_salidas_espera()
+        
+        filtro_actual = entry_busqueda_espera.get().strip() 
+        actualizar_tabla_salidas_espera(filtro_actual)
         return
 
     ventana_reporte_salidas_espera = tk.Toplevel(ventana)
     ventana_reporte_salidas_espera.title("Reporte de Salidas en Espera")
-    ventana_reporte_salidas_espera.geometry("700x500")
+    ventana_reporte_salidas_espera.geometry("800x500") 
     ventana_reporte_salidas_espera.configure(bg="#A9A9A9")
 
-   
+    
     style = ttk.Style(ventana_reporte_salidas_espera)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -2172,51 +2221,63 @@ def generar_reporte_salidas_espera():
     style.configure("Grid.Treeview", foreground="#000000", background="#ffffff", font=("Segoe UI", 10))
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
+    style.configure("TCombobox", foreground="#000000", background="#ffffff", fieldbackground="#ffffff", insertcolor="#000000", font=("Segoe UI", 10))
 
-   
+    
+    frame_controles = tk.Frame(ventana_reporte_salidas_espera, bg="#A9A9A9")
+    frame_controles.pack(pady=10, padx=10, fill=tk.X)
+
+    ttk.Label(frame_controles, text="Buscar:", style="CustomLabel.TLabel").pack(side=tk.LEFT)
+    entry_busqueda_espera = ttk.Entry(frame_controles, style="CustomEntry.TEntry") 
+    entry_busqueda_espera.pack(side=tk.LEFT, padx=(0, 10), expand=True, fill=tk.X)
+
+    
     tabla_salidas_espera = ttk.Treeview(ventana_reporte_salidas_espera, columns=("Código", "Producto", "Cantidad", "Departamento", "EsperaID"), show="headings", style="Grid.Treeview")
     tabla_salidas_espera.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
     tabla_salidas_espera.column("EsperaID", width=0, stretch=tk.NO) 
 
-   
     tabla_salidas_espera.heading("Código", text="Código", anchor=tk.W)
     tabla_salidas_espera.heading("Producto", text="Producto", anchor=tk.W)
     tabla_salidas_espera.heading("Cantidad", text="Cantidad", anchor=tk.W)
     tabla_salidas_espera.heading("Departamento", text="Departamento", anchor=tk.W)
 
-    
     tabla_salidas_espera.column("Código", width=100)
     tabla_salidas_espera.column("Producto", width=200)
     tabla_salidas_espera.column("Cantidad", width=100)
     tabla_salidas_espera.column("Departamento", width=200)
 
- 
     scrollbar_vertical = ttk.Scrollbar(ventana_reporte_salidas_espera, orient="vertical", command=tabla_salidas_espera.yview)
+    
     scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=10)
     tabla_salidas_espera.configure(yscrollcommand=scrollbar_vertical.set)
+    
+    tabla_salidas_espera.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    actualizar_tabla_salidas_espera()
+
+    
 
     def agregar_requisicion():
         item_seleccionado = tabla_salidas_espera.selection()
         if item_seleccionado:
             item = item_seleccionado[0]
             values = tabla_salidas_espera.item(item, "values")
+            
             if len(values) >= 5:
                 codigo_producto = values[0]
                 producto_nombre = values[1] 
-                cantidad_salida = int(values[2]) 
+                cantidad_salida = float(values[2]) 
                 departamento_nombre = values[3]
                 espera_id = values[4]
 
                 def confirmar_requisicion():
-                    numero_requisicion = entry_requisicion.get()
-                    
+                    numero_requisicion = entry_requisicion.get().strip()
+                    if not numero_requisicion:
+                        messagebox.showerror("Error", "El número de requisición no puede estar vacío.")
+                        return
 
+                    fecha_salida_str = entry_fecha.get()
                     try:
-                       
-                        fecha_salida = datetime.datetime.now() 
-
+                        fecha_salida = datetime.datetime.strptime(fecha_salida_str, "%Y-%m-%d").date()
                     except ValueError:
                         messagebox.showerror("Error", "Formato de fecha incorrecto (YYYY-MM-DD).")
                         return
@@ -2225,14 +2286,21 @@ def generar_reporte_salidas_espera():
                     if mydb:
                         cursor = mydb.cursor()
                         try:
-                           
-                            cursor.execute("SELECT ProductoID FROM productos WHERE Codigo = %s", (codigo_producto,))
+                            
+                            cursor.execute("SELECT ProductoID, Stock FROM productos WHERE Codigo = %s", (codigo_producto,))
                             resultado_prod = cursor.fetchone()
                             if not resultado_prod:
                                 messagebox.showerror("Error", f"Producto con código '{codigo_producto}' no encontrado.")
                                 return
                             producto_id_para_salida = resultado_prod[0]
+                            stock_actual = resultado_prod[1]
 
+                           
+                            if stock_actual < cantidad_salida:
+                                messagebox.showerror("Error de Stock", f"No hay suficiente stock para el producto '{producto_nombre}'. Stock actual: {stock_actual}. Cantidad solicitada: {cantidad_salida}.")
+                                return
+
+                            
                             cursor.execute("SELECT DepartamentoID FROM departamentos WHERE NombreDepartamento = %s", (departamento_nombre,))
                             resultado_dep = cursor.fetchone()
                             if not resultado_dep:
@@ -2240,7 +2308,7 @@ def generar_reporte_salidas_espera():
                                 return
                             departamento_id_para_salida = resultado_dep[0]
 
-                           
+                            
                             query_insert_salida = """
                                 INSERT INTO salidas (ProductoID, CodigoProducto, Cantidad, FechaSalida, DepartamentoID, NumeroRequisicion)
                                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -2255,16 +2323,17 @@ def generar_reporte_salidas_espera():
                             """
                             cursor.execute(query_update_producto, (cantidad_salida, fecha_salida, departamento_id_para_salida, producto_id_para_salida))
 
-                           
+                            
                             query_eliminar_espera = "DELETE FROM salidas_espera WHERE SalidaEsperaID = %s"
                             cursor.execute(query_eliminar_espera, (espera_id,))
 
                             mydb.commit()
                             messagebox.showinfo("Salida Registrada", f"La salida del producto '{producto_nombre}' al departamento '{departamento_nombre}' ha sido registrada y el inventario actualizado.")
 
-                            actualizar_tabla_salidas_espera()
-                           
-
+                            actualizar_tabla_salidas_espera(entry_busqueda_espera.get().strip()) # Recargar con el filtro actual
+                            if ventana_requisicion.winfo_exists():
+                                ventana_requisicion.destroy()
+                            
                         except mysql.connector.Error as err:
                             mydb.rollback() 
                             messagebox.showerror("Error", f"Error al confirmar la requisición: {err}")
@@ -2272,9 +2341,6 @@ def generar_reporte_salidas_espera():
                             if mydb and mydb.is_connected():
                                 cursor.close()
                                 mydb.close()
-
-                        if ventana_requisicion.winfo_exists():
-                            ventana_requisicion.destroy()
 
                 ventana_requisicion = tk.Toplevel(ventana_reporte_salidas_espera)
                 ventana_requisicion.title("Agregar Requisición y Fecha")
@@ -2287,39 +2353,15 @@ def generar_reporte_salidas_espera():
                 tk.Label(ventana_requisicion, text="Fecha de Salida:", fg="#ffffff", bg="#A9A9A9").grid(row=1, column=0, padx=5, pady=5)
                 entry_fecha = ttk.Entry(ventana_requisicion)
                 entry_fecha.grid(row=1, column=1, padx=5, pady=5)
+                
+                entry_fecha.insert(0, datetime.date.today().strftime("%Y-%m-%d")) 
                 ttk.Button(ventana_requisicion, text="Calendario", command=lambda: abrir_calendario(ventana_requisicion, entry_fecha)).grid(row=1, column=2, padx=5, pady=5)
 
                 ttk.Button(ventana_requisicion, text="Confirmar", command=confirmar_requisicion).grid(row=2, column=0, columnspan=3, pady=10)
             else:
-                messagebox.showerror("Error", "Datos de producto incompletos.")
+                messagebox.showerror("Error", "Datos de producto incompletos. Asegúrese de seleccionar un producto válido.")
         else:
-            messagebox.showerror("Error", "Seleccione un producto.")
-
-    def eliminar_salida_espera():
-        seleccion = tabla_salidas_espera.selection()
-        if seleccion:
-            item_id = seleccion[0]
-            espera_id = tabla_salidas_espera.item(item_id, "values")[-1]
-
-            if messagebox.askyesno("Eliminar Salida en Espera", "¿Seguro que desea eliminar esta solicitud?"):
-                mydb = conectar_mysql()
-                if mydb:
-                    cursor = mydb.cursor()
-                    query_eliminar = "DELETE FROM salidas_espera WHERE SalidaEsperaID = %s"
-                    try:
-                        cursor.execute(query_eliminar, (espera_id,))
-                        mydb.commit()
-                        actualizar_tabla_salidas_espera()
-                        messagebox.showinfo("Solicitud Eliminada", "La solicitud ha sido eliminada.")
-                    except mysql.connector.Error as err:
-                        mydb.rollback()
-                        messagebox.showerror("Error", f"Error al eliminar la solicitud: {err}")
-                    finally:
-                        if mydb and mydb.is_connected():
-                            cursor.close()
-                            mydb.close()
-        else:
-            messagebox.showerror("Error", "Por favor, seleccione una solicitud para eliminar.")
+            messagebox.showerror("Error", "Seleccione un producto para agregar requisición.")
 
     def editar_salida_espera():
         seleccion = tabla_salidas_espera.selection()
@@ -2346,6 +2388,7 @@ def generar_reporte_salidas_espera():
             entry_producto = ttk.Entry(ventana_edicion)
             entry_producto.grid(row=1, column=1, padx=5, pady=5)
             entry_producto.insert(0, producto_actual)
+            entry_producto.config(state="readonly") 
 
             tk.Label(ventana_edicion, text="Cantidad:", fg="#ffffff", bg="#A9A9A9").grid(row=2, column=0, padx=5, pady=5)
             entry_cantidad = ttk.Entry(ventana_edicion)
@@ -2360,11 +2403,11 @@ def generar_reporte_salidas_espera():
             combo_departamento.set(departamento_actual_nombre) 
 
             def guardar_cambios():
-                producto_editado = entry_producto.get()
+                
                 try:
-                    cantidad_editada = int(entry_cantidad.get())
+                    cantidad_editada = float(entry_cantidad.get()) 
                 except ValueError:
-                    messagebox.showerror("Error", "Cantidad debe ser un número entero.")
+                    messagebox.showerror("Error", "Cantidad debe ser un número (entero o decimal).")
                     return
                 departamento_nombre_editado = combo_departamento.get()
 
@@ -2372,6 +2415,9 @@ def generar_reporte_salidas_espera():
                 if mydb:
                     cursor = mydb.cursor()
                     try:
+                        # Obtener ProductoID (por si acaso el código_actual no es suficiente)
+                        cursor.execute("SELECT ProductoID FROM productos WHERE Codigo = %s", (codigo_actual,))
+                        producto_id_update = cursor.fetchone()[0]
                         
                         cursor.execute("SELECT DepartamentoID FROM departamentos WHERE NombreDepartamento = %s", (departamento_nombre_editado,))
                         resultado_dep = cursor.fetchone()
@@ -2382,19 +2428,21 @@ def generar_reporte_salidas_espera():
 
                         query_actualizar = """
                             UPDATE salidas_espera
-                            SET ProductoID = (SELECT ProductoID FROM productos WHERE Codigo = %s),
+                            SET ProductoID = %s,
                                 Cantidad = %s,
-                                DepartamentoID = %s -- Cambiado a DepartamentoID
+                                DepartamentoID = %s 
                             WHERE SalidaEsperaID = %s
                         """
-                        cursor.execute(query_actualizar, (codigo_actual, cantidad_editada, departamento_id_editado, espera_id))
+                        cursor.execute(query_actualizar, (producto_id_update, cantidad_editada, departamento_id_editado, espera_id))
                         mydb.commit()
-                        actualizar_tabla_salidas_espera()
+                        actualizar_tabla_salidas_espera(entry_busqueda_espera.get().strip()) # Recargar con el filtro actual
                         ventana_edicion.destroy()
                         messagebox.showinfo("Solicitud Editada", "La solicitud ha sido actualizada.")
                     except mysql.connector.Error as err:
                         mydb.rollback()
                         messagebox.showerror("Error", f"Error al editar la solicitud: {err}")
+                    except TypeError:
+                        messagebox.showerror("Error", "Producto no encontrado. Verifique los datos.")
                     finally:
                         if mydb and mydb.is_connected():
                             cursor.close()
@@ -2404,56 +2452,15 @@ def generar_reporte_salidas_espera():
         else:
             messagebox.showerror("Error", "Por favor, seleccione una solicitud para editar.")
 
-    def buscar_producto_abreviatura():
-        """Abre una ventana para buscar producto por abreviatura en salidas en espera."""
-        ventana_busqueda_abreviatura = tk.Toplevel(ventana_reporte_salidas_espera)
-        ventana_busqueda_abreviatura.title("Buscar Producto por Abreviatura en Espera")
-        ventana_busqueda_abreviatura.configure(bg="#A9A9A9")
+    
 
-        tk.Label(ventana_busqueda_abreviatura, text="Ingrese abreviatura:", fg="#ffffff", bg="#A9A9A9").pack(padx=10, pady=10)
-        entry_abreviatura = ttk.Entry(ventana_busqueda_abreviatura)
-        entry_abreviatura.pack(padx=10, pady=5)
-
-        def filtrar_por_abreviatura(event):
-            abreviatura = entry_abreviatura.get().lower()
-            tabla_salidas_espera.delete(*tabla_salidas_espera.get_children())
-            mydb = conectar_mysql()
-            if mydb:
-                cursor = mydb.cursor()
-                query_buscar = """
-                    SELECT spe.SalidaEsperaID, p.Codigo, p.Nombre, spe.Cantidad, d.NombreDepartamento -- Cambiado a d.NombreDepartamento
-                    FROM salidas_espera spe
-                    JOIN productos p ON spe.ProductoID = p.ProductoID
-                    JOIN departamentos d ON spe.DepartamentoID = d.DepartamentoID -- Agregado JOIN
-                    WHERE LOWER(p.Nombre) LIKE %s
-                """
-                try:
-                    cursor.execute(query_buscar, (f"%{abreviatura}%",))
-                    salidas_filtradas_db = cursor.fetchall()
-                    for espera_id, codigo, producto, cantidad, departamento_nombre in salidas_filtradas_db: 
-                        tabla_salidas_espera.insert("", tk.END, values=(codigo, producto, cantidad, departamento_nombre, espera_id))
-                except mysql.connector.Error as err:
-                    messagebox.showerror("Error", f"Error al buscar por abreviatura: {err}")
-                finally:
-                    if mydb and mydb.is_connected():
-                        cursor.close()
-                        mydb.close()
-
-        entry_abreviatura.bind("<KeyRelease>", filtrar_por_abreviatura)
-
-   
+    
     menu_contextual = tk.Menu(ventana_reporte_salidas_espera, tearoff=0)
-    menu_contextual.add_command(label="Eliminar", command=eliminar_salida_espera)
-    menu_contextual.add_command(label="Editar", command=editar_salida_espera)
-    menu_contextual.add_command(label="Agregar Requisición", command=agregar_requisicion)
-    menu_contextual.add_command(label="Buscar por Abreviatura", command=buscar_producto_abreviatura)
-
    
+    menu_contextual.add_command(label="Agregar Requisición", command=agregar_requisicion)
+    
+
     def mostrar_menu_contextual(event):
-        """
-        Muestra el menú contextual de clic derecho solo si el usuario es administrador
-        para el reporte de salidas en espera.
-        """
         global current_user_role_is_admin 
 
         if current_user_role_is_admin: 
@@ -2462,15 +2469,30 @@ def generar_reporte_salidas_espera():
                 tabla_salidas_espera.selection_set(item)
                 menu_contextual.post(event.x_root, event.y_root)
         else:
-           
             messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial de salidas en espera.")
-
-   
+    
     tabla_salidas_espera.bind("<Button-3>", mostrar_menu_contextual)
 
     
+    def aplicar_filtro_espera(*args): 
+        filtro_busqueda = entry_busqueda_espera.get().strip()
+        actualizar_tabla_salidas_espera(filtro_busqueda)
+
+    
+    entry_busqueda_espera.bind("<KeyRelease>", aplicar_filtro_espera)
+
+    
+    actualizar_tabla_salidas_espera()
+
+    
+
+   
     ventana_reporte_salidas_espera.grid_columnconfigure(0, weight=1)
     ventana_reporte_salidas_espera.grid_rowconfigure(0, weight=1)
+
+    ventana_reporte_salidas_espera.mainloop()
+
+
 
 
 def obtener_departamentos():
@@ -2489,6 +2511,8 @@ def obtener_departamentos():
                 cursor.close()
                 mydb.close()
     return departamentos
+
+from tkcalendar import Calendar 
 
 def abrir_calendario(parent, entry):
     def seleccionar_fecha():
@@ -2561,7 +2585,7 @@ def ventana_reportes():
     categorias = obtener_categorias_db()
     categoria_seleccionada = ttk.Combobox(frame_filtros, values=categorias, style="TCombobox", width=20)
     categoria_seleccionada.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-    categoria_seleccionada.set("Todas")
+    categoria_seleccionada.set("")
 
     fecha_inicio_cat = tk.StringVar()
     fecha_fin_cat = tk.StringVar()
@@ -2623,7 +2647,7 @@ def ventana_reportes():
     label_departamento.grid(row=1, column=0, padx=5, pady=5, sticky="w")
     departamento_seleccionado = ttk.Combobox(frame_filtros, values=lista_departamentos_reporte, style="TCombobox", width=30)
     departamento_seleccionado.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-    departamento_seleccionado.set("Todos")
+    departamento_seleccionado.set("")
 
     fecha_inicio_dep = tk.StringVar()
     fecha_fin_dep = tk.StringVar()
@@ -2669,7 +2693,7 @@ def ventana_reportes():
     opciones_stock = ["Todos", "Bajo Stock (<= 2)", "Stock Medio (3-10)", "Stock Alto (>= 11)"]
     stock_seleccionado = ttk.Combobox(frame_filtros, values=opciones_stock, style="TCombobox", width=25)
     stock_seleccionado.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-    stock_seleccionado.set("Todos")
+    stock_seleccionado.set("")
 
     global tabla_reporte
     tabla_reporte = ttk.Treeview(frame_tabla, style="Grid.Treeview")
@@ -2677,9 +2701,9 @@ def ventana_reportes():
 
     def limpiar_tabla_reporte():
         tabla_reporte.delete(*tabla_reporte.get_children())
-        categoria_seleccionada.set("Todas")
-        departamento_seleccionado.set("Todos")
-        stock_seleccionado.set("Todos")
+        categoria_seleccionada.set("")
+        departamento_seleccionado.set("")
+        stock_seleccionado.set("")
         fecha_inicio_cat.set("")
         fecha_fin_cat.set("")
         label_fecha_inicio_seleccionada_cat.config(text="Inicio: --")
@@ -2692,19 +2716,60 @@ def ventana_reportes():
     boton_limpiar = ttk.Button(frame_tabla, text="Limpiar", command=limpiar_tabla_reporte, style="Small.TButton")
     boton_limpiar.pack(side="bottom", anchor="se", padx=10, pady=10)
 
-    def generar_reporte():
+    def generar_reporte(): 
+        
         categoria = categoria_seleccionada.get()
         departamento = departamento_seleccionado.get()
+        stock = stock_seleccionado.get()
+
         fecha_inicio_cat_str = fecha_inicio_cat.get()
         fecha_fin_cat_str = fecha_fin_cat.get()
         fecha_inicio_dep_str = fecha_inicio_dep.get()
         fecha_fin_dep_str = fecha_fin_dep.get()
-        stock = stock_seleccionado.get()
 
-        if departamento != "Todos":
-            generar_reporte_departamento(departamento, categoria, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte, stock)
+        
+        tabla_reporte.delete(*tabla_reporte.get_children())
+        tabla_reporte["columns"] = () 
+        tabla_reporte.heading("#0", text="") 
+
+        
+        filtros_principales_activos = []
+        if categoria != "":
+            filtros_principales_activos.append("categoria")
+        if departamento != "":
+            filtros_principales_activos.append("departamento")
+        if stock != "":
+            filtros_principales_activos.append("stock")
+
+        num_filtros_principales_activos = len(filtros_principales_activos)
+
+        
+
+        if num_filtros_principales_activos == 1:
+           
+            if "stock" in filtros_principales_activos:
+               
+                generar_reporte_de_stock(stock, categoria, departamento, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte)
+
+            elif "departamento" in filtros_principales_activos:
+             
+                generar_reporte_departamento(departamento, categoria, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte, stock)
+
+            elif "categoria" in filtros_principales_activos:
+               
+                generar_reporte_consumo_lapso_filtrado(categoria, fecha_inicio_cat_str, fecha_fin_cat_str, departamento, stock, tabla_reporte, ventana_reporte)
+
+        elif num_filtros_principales_activos > 1:
+            
+            messagebox.showerror("Error de Selección",
+                                "Por favor, selecciona UN ÚNICO filtro principal (Categoría, Departamento o Stock) a la vez para generar el reporte.",
+                                parent=ventana_reporte)
         else:
-            generar_reporte_consumo_lapso_filtrado(categoria, fecha_inicio_cat_str, fecha_fin_cat_str, departamento, stock, tabla_reporte, ventana_reporte)
+           
+            messagebox.showinfo("Selección de Filtros",
+                                "Por favor, selecciona una opción en Categoría, Departamento o Stock para generar un reporte.",
+                                parent=ventana_reporte)
+            
 
     boton_generar_filtrado = ttk.Button(frame_filtros, text="Generar Reporte Filtrado", command=generar_reporte)
     boton_generar_filtrado.grid(row=3, column=0, columnspan=6, pady=10)
@@ -2718,9 +2783,29 @@ def ventana_reportes():
 
     frame_tabla.grid_columnconfigure(0, weight=1)
 
-def generar_reporte_consumo_lapso_filtrado(categoria_filtro, fecha_inicio_str, fecha_fin_str, departamento_filtro, stock_filtro_texto, tabla, ventana):
-    """Genera un reporte de consumo por lapso, filtrado desde la base de datos."""
-    tabla.delete(*tabla.get_children())
+def generar_reporte_consumo_lapso_filtrado(categoria_filtro, fecha_inicio_str, fecha_fin_str, departamento_filtro_ignorado, stock_filtro_ignorado, tabla, ventana):
+    """
+    Genera un reporte de consumo por categoría/lapso.
+    Muestra: Categoría, Producto, Cantidad Consumida, Unidad Medida, Lapso (rango de fechas).
+    """
+    tabla.delete(*tabla.get_children()) # Limpiar tabla existente
+
+    
+    tabla["columns"] = ("Categoría", "Producto", "Cantidad Consumida", "Unidad Medida", "Lapso")
+    tabla.heading("#0", text="") 
+    tabla.heading("Categoría", text="Categoría", anchor=tk.W)
+    tabla.heading("Producto", text="Producto", anchor=tk.W)
+    tabla.heading("Cantidad Consumida", text="Cantidad Consumida", anchor=tk.W)
+    tabla.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
+    tabla.heading("Lapso", text="Lapso", anchor=tk.W)
+
+    tabla.column("#0", width=0, stretch=tk.NO) 
+    tabla.column("Categoría", width=120, anchor=tk.W)
+    tabla.column("Producto", width=200, anchor=tk.W)
+    tabla.column("Cantidad Consumida", width=100, anchor=tk.W)
+    tabla.column("Unidad Medida", width=100, anchor=tk.W) 
+    tabla.column("Lapso", width=180, anchor=tk.W) 
+
     mydb = conectar_mysql()
     if not mydb:
         return
@@ -2730,72 +2815,81 @@ def generar_reporte_consumo_lapso_filtrado(categoria_filtro, fecha_inicio_str, f
         SELECT
             cat.NombreCategoria,
             p.Nombre,
-            s.Cantidad,
-            s.FechaSalida,
-            d.NombreDepartamento,
-            p.Stock
+            SUM(s.Cantidad) AS CantidadTotalConsumida,
+            p.UnidadMedida, -- Seleccionar UnidadMedida de la tabla productos
+            MIN(s.FechaSalida) AS FechaInicioLapso,
+            MAX(s.FechaSalida) AS FechaFinLapso
         FROM salidas s
         JOIN productos p ON s.ProductoID = p.ProductoID
-        JOIN departamentos d ON s.DepartamentoID = d.DepartamentoID
-        JOIN categorias cat ON p.CategoriaID = cat.CategoriaID -- CORRECCIÓN AQUÍ: p.CategoriaID
+        JOIN categorias cat ON p.CategoriaID = cat.CategoriaID
         WHERE 1=1
     """
     params = []
     lapso_texto = ""
 
-    if categoria_filtro != "Todas":
+    if categoria_filtro != "Todas" and categoria_filtro != "":
         query += " AND cat.NombreCategoria = %s"
         params.append(categoria_filtro)
-
-    if departamento_filtro != "Todos":
-        query += " AND d.NombreDepartamento = %s"
-        params.append(departamento_filtro)
 
     if fecha_inicio_str and fecha_fin_str:
         query += " AND s.FechaSalida BETWEEN %s AND %s"
         params.extend([fecha_inicio_str, fecha_fin_str])
         lapso_texto = f"{fecha_inicio_str} al {fecha_fin_str}"
+    else:
+        lapso_texto = "Todo el Historial"
 
-    if stock_filtro_texto != "Todos":
-        if stock_filtro_texto == "Bajo Stock (<= 2)":
-            query += " AND p.Stock <= 2"
-        elif stock_filtro_texto == "Stock Medio (3-10)":
-            query += " AND p.Stock BETWEEN 3 AND 10"
-        elif stock_filtro_texto == "Stock Alto (>= 11)":
-            query += " AND p.Stock >= 11"
+    query += " GROUP BY cat.NombreCategoria, p.Nombre, p.UnidadMedida"
+    query += " ORDER BY cat.NombreCategoria, p.Nombre"
 
     try:
         cursor.execute(query, params)
         reporte_data = cursor.fetchall()
 
-        tabla["columns"] = ("Categoría", "Producto", "Cantidad Consumida", "Fecha de Salida", "Departamento", "Lapso", "Stock Actual")
-        tabla.heading("#1", text="Categoría")
-        tabla.column("#1", minwidth=100, stretch=tk.YES)
-        tabla.heading("#2", text="Producto")
-        tabla.column("#2", minwidth=250, stretch=tk.YES)
-        tabla.heading("#3", text="Cantidad Consumida")
-        tabla.column("#3", minwidth=150, stretch=tk.YES)
-        tabla.heading("#4", text="Fecha de Salida")
-        tabla.column("#4", minwidth=150, stretch=tk.YES)
-        tabla.heading("#5", text="Departamento")
-        tabla.column("#5", minwidth=150, stretch=tk.YES)
-        tabla.heading("#6", text="Lapso")
-        tabla.column("#6", minwidth=200, stretch=tk.YES)
-        tabla.heading("#7", text="Stock Actual")
-        tabla.column("#7", minwidth=100, stretch=tk.YES)
+        if not reporte_data:
+            messagebox.showinfo("Sin Resultados", "No se encontraron datos de consumo para los filtros de categoría seleccionados.", parent=ventana)
+            tabla["columns"] = ()
+            tabla.heading("#0", text="")
+            return
 
-        for categoria_nombre, producto, cantidad, fecha_salida, departamento_nombre, stock in reporte_data:
-            tabla.insert("", tk.END, values=(categoria_nombre, producto, cantidad, fecha_salida, departamento_nombre, lapso_texto, stock))
+        
+        for categoria_nombre, producto, cantidad_consumida, unidad_medida, _, _ in reporte_data:
+            tabla.insert("", tk.END, values=(categoria_nombre, producto, cantidad_consumida, unidad_medida, lapso_texto))
 
     except mysql.connector.Error as err:
-        messagebox.showerror("Error", f"Error al generar el reporte: {err}", parent=ventana)
+        messagebox.showerror("Error", f"Error al generar el reporte de categoría/consumo: {err}", parent=ventana)
     finally:
-        cursor.close()
-        mydb.close()
+        if cursor:
+            cursor.close()
+        if mydb and mydb.is_connected():
+            mydb.close()
 
 def generar_reporte_departamento(departamento_filtro, categoria_filtro, fecha_inicio_str, fecha_fin_str, tabla, ventana, stock_filtro_texto):
-    """Genera un reporte de consumo por departamento y lapso, filtrado desde la base de datos."""
-    tabla.delete(*tabla.get_children())
+    """
+    Genera un reporte de consumo por departamento y lapso.
+    Muestra: Departamento, Categoría, Producto, Cantidad Consumida, Unidad Medida, Lapso, Número de Requisición.
+    """
+    tabla.delete(*tabla.get_children()) 
+
+    
+    tabla["columns"] = ("Departamento", "Categoría", "Producto", "Cantidad Consumida", "Unidad Medida", "Lapso", "Número Requisición")
+    tabla.heading("#0", text="") 
+    tabla.heading("Departamento", text="Departamento", anchor=tk.W)
+    tabla.heading("Categoría", text="Categoría", anchor=tk.W)
+    tabla.heading("Producto", text="Producto", anchor=tk.W)
+    tabla.heading("Cantidad Consumida", text="Cantidad Consumida", anchor=tk.W)
+    tabla.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
+    tabla.heading("Lapso", text="Lapso", anchor=tk.W)
+    tabla.heading("Número Requisición", text="Número Requisición", anchor=tk.W)
+
+    tabla.column("#0", width=0, stretch=tk.NO)
+    tabla.column("Departamento", width=120, anchor=tk.W)
+    tabla.column("Categoría", width=100, anchor=tk.W)
+    tabla.column("Producto", width=150, anchor=tk.W)
+    tabla.column("Cantidad Consumida", width=100, anchor=tk.W)
+    tabla.column("Unidad Medida", width=100, anchor=tk.W)
+    tabla.column("Lapso", width=120, anchor=tk.W) 
+    tabla.column("Número Requisición", width=120, anchor=tk.W) 
+
     mydb = conectar_mysql()
     if not mydb:
         return
@@ -2804,31 +2898,117 @@ def generar_reporte_departamento(departamento_filtro, categoria_filtro, fecha_in
     query = """
         SELECT
             d.NombreDepartamento,
-            p.Nombre,
             cat.NombreCategoria,
+            p.Nombre,
             s.Cantidad,
-            s.FechaSalida,
-            p.Stock
+            p.UnidadMedida, -- Añadido
+            s.FechaSalida, -- Se usa para construir el lapso_texto si es necesario
+            s.NumeroRequisicion -- Añadido
         FROM salidas s
         JOIN productos p ON s.ProductoID = p.ProductoID
         JOIN departamentos d ON s.DepartamentoID = d.DepartamentoID
-        JOIN categorias cat ON p.CategoriaID = cat.CategoriaID -- CORRECCIÓN AQUÍ: p.CategoriaID
-        WHERE d.NombreDepartamento = %s
+        JOIN categorias cat ON p.CategoriaID = cat.CategoriaID
+        WHERE 1=1 -- Siempre iniciar con 1=1 para condiciones dinámicas
     """
-    params = [departamento_filtro]
-
+    params = []
     lapso_texto = ""
 
-    if categoria_filtro != "Todas":
+    
+    if departamento_filtro != "Todos" and departamento_filtro != "":
+        query += " AND d.NombreDepartamento = %s"
+        params.append(departamento_filtro)
+
+    
+    if categoria_filtro != "Todas" and categoria_filtro != "":
         query += " AND cat.NombreCategoria = %s"
         params.append(categoria_filtro)
 
+    
     if fecha_inicio_str and fecha_fin_str:
         query += " AND s.FechaSalida BETWEEN %s AND %s"
         params.extend([fecha_inicio_str, fecha_fin_str])
         lapso_texto = f"{fecha_inicio_str} al {fecha_fin_str}"
+    else:
+        lapso_texto = "Todo el Historial"
+    
+    if stock_filtro_texto != "Todos" and stock_filtro_texto != "":
+        if stock_filtro_texto == "Bajo Stock (<= 2)":
+            query += " AND p.Stock <= 2"
+        elif stock_filtro_texto == "Stock Medio (3-10)":
+            query += " AND p.Stock BETWEEN 3 AND 10"
+        elif stock_filtro_texto == "Stock Alto (>= 11)":
+            query += " AND p.Stock >= 11"
+    
+    query += " ORDER BY d.NombreDepartamento, s.FechaSalida DESC" 
 
-    if stock_filtro_texto != "Todos":
+    try:
+        cursor.execute(query, params)
+        reporte_data = cursor.fetchall()
+
+        if not reporte_data:
+            messagebox.showinfo("Sin Resultados", "No se encontraron datos de consumo para los filtros de departamento seleccionados.", parent=ventana)
+            
+            tabla["columns"] = ()
+            tabla.heading("#0", text="")
+            return
+
+       
+        for departamento_nombre, categoria_nombre, producto, cantidad, unidad_medida, fecha_salida, numero_requisicion in reporte_data:
+            
+            tabla.insert("", tk.END, values=(departamento_nombre, categoria_nombre, producto, cantidad, unidad_medida, lapso_texto, numero_requisicion))
+
+    except mysql.connector.Error as err:
+        messagebox.showerror("Error", f"Error al generar el reporte de departamento: {err}", parent=ventana)
+    finally:
+        if cursor:
+            cursor.close()
+        if mydb and mydb.is_connected():
+            mydb.close()
+
+def generar_reporte_de_stock(stock_filtro_texto, categoria_filtro, departamento_filtro, fecha_inicio_str, fecha_fin_str, tabla, ventana):
+    """
+    Genera un reporte de productos basado en el nivel de stock,
+    con filtros opcionales por categoría y departamento.
+    Muestra: Producto, Categoría, Unidad de Medida, Stock Actual.
+    """
+    tabla.delete(*tabla.get_children())
+
+    
+    tabla["columns"] = ("Producto", "Categoría", "Unidad Medida", "Stock Actual")
+    tabla.heading("#0", text="")
+    tabla.heading("Producto", text="Producto", anchor=tk.W)
+    tabla.heading("Categoría", text="Categoría", anchor=tk.W)
+    tabla.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
+    tabla.heading("Stock Actual", text="Stock Actual", anchor=tk.W)
+
+    tabla.column("#0", width=0, stretch=tk.NO)
+    tabla.column("Producto", width=250, anchor=tk.W)
+    tabla.column("Categoría", width=150, anchor=tk.W)
+    tabla.column("Unidad Medida", width=120, anchor=tk.W)
+    tabla.column("Stock Actual", width=100, anchor=tk.CENTER)
+
+
+    mydb = conectar_mysql()
+    if not mydb:
+        return
+
+    cursor = mydb.cursor()
+
+    
+    query = """
+        SELECT
+            p.Nombre AS NombreProducto,
+            cat.NombreCategoria,
+            p.UnidadMedida,
+            p.Stock AS StockActualProducto
+        FROM productos p
+        JOIN categorias cat ON p.CategoriaID = cat.CategoriaID
+        WHERE 1=1 -- Base para añadir condiciones dinámicas
+    """
+    params = []
+
+    
+    if stock_filtro_texto != "Todos" and stock_filtro_texto != "":
         if stock_filtro_texto == "Bajo Stock (<= 2)":
             query += " AND p.Stock <= 2"
         elif stock_filtro_texto == "Stock Medio (3-10)":
@@ -2836,34 +3016,36 @@ def generar_reporte_departamento(departamento_filtro, categoria_filtro, fecha_in
         elif stock_filtro_texto == "Stock Alto (>= 11)":
             query += " AND p.Stock >= 11"
 
+    
+    if categoria_filtro != "Todas" and categoria_filtro != "":
+        query += " AND cat.NombreCategoria = %s"
+        params.append(categoria_filtro)
+
+    
+
+
+    query += " ORDER BY p.Nombre"
+
     try:
         cursor.execute(query, params)
         reporte_data = cursor.fetchall()
 
-        tabla["columns"] = ("Departamento", "Producto", "Categoría", "Cantidad Consumida", "Fecha de Salida", "Lapso", "Stock Actual")
-        tabla.heading("#1", text="Departamento")
-        tabla.column("#1", minwidth=150, stretch=tk.YES)
-        tabla.heading("#2", text="Producto")
-        tabla.column("#2", minwidth=150, stretch=tk.YES)
-        tabla.heading("#3", text="Categoría")
-        tabla.column("#3", minwidth=100, stretch=tk.YES)
-        tabla.heading("#4", text="Cantidad Consumida")
-        tabla.column("#4", minwidth=150, stretch=tk.YES)
-        tabla.heading("#5", text="Fecha de Salida")
-        tabla.column("#5", minwidth=150, stretch=tk.YES)
-        tabla.heading("#6", text="Lapso")
-        tabla.column("#6", minwidth=200, stretch=tk.YES)
-        tabla.heading("#7", text="Stock Actual")
-        tabla.column("#7", minwidth=100, stretch=tk.YES)
+        if not reporte_data:
+            messagebox.showinfo("Sin Resultados", "No se encontraron productos para los filtros de stock seleccionados.", parent=ventana)
+            tabla["columns"] = ()
+            tabla.heading("#0", text="")
+            return
 
-        for departamento_nombre, producto, categoria_nombre, cantidad, fecha_salida, stock in reporte_data:
-            tabla.insert("", tk.END, values=(departamento_nombre, producto, categoria_nombre, cantidad, fecha_salida, lapso_texto, stock))
+        for row in reporte_data:
+            tabla.insert("", tk.END, values=row)
 
     except mysql.connector.Error as err:
-        messagebox.showerror("Error", f"Error al generar el reporte: {err}", parent=ventana)
+        messagebox.showerror("Error", f"Error al generar el reporte de stock: {err}", parent=ventana)
     finally:
-        cursor.close()
-        mydb.close()
+        if cursor:
+            cursor.close()
+        if mydb and mydb.is_connected():
+            mydb.close()
         
 class PDFConMembrete(FPDF):
     def __init__(self, *args, **kwargs):
@@ -2916,7 +3098,7 @@ class PDFConMembrete(FPDF):
 
     def print_titulo(self):
         self.set_font("Arial", 'B', 16)
-        self.cell(0, 10, "Reporte", ln=1, align='C')
+        self.cell(0, 10, "Reporte General de inventario", ln=1, align='C')
         self.set_font("Arial", size=10)
 
     def print_encabezados_tabla(self, headers, col_widths, x_start):
