@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 import tkinter.simpledialog as simpledialog
 import subprocess
 import threading
+import sys
 
 import csv
 from tkinter import filedialog, messagebox
@@ -289,6 +290,11 @@ def verificar_clave(ventana_clave, entry_clave, ventana_login):
 
         #INICIA SESION AL PROGRAMA CON EL USUARIO PRESETERMINADO Y CREADOS DENTRO DEL PROGRAMA
 
+def resource_path(relative_path):
+    """ ESTA FUNCION SE UTULIZA PARA COMPILAR TODOS LOS LOGOS AL EJECUTABLE """
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
 def iniciar_sesion():
     """Permite al usuario iniciar sesión y establece los privilegios."""
     global ventana_login, current_user_role_is_admin
@@ -315,7 +321,7 @@ def iniciar_sesion():
 
     try:
        
-        imagen_logo = Image.open("C:/Users/monster/Desktop/src/server/routes/imagenes/logo.png")
+        imagen_logo = Image.open(resource_path("server/routes/imagenes/logo.png"))
         imagen_logo = imagen_logo.resize((300, 300))
         logo = ImageTk.PhotoImage(imagen_logo)
         label_logo = tk.Label(frame_logo, image=logo, bg="#263238")
@@ -3069,7 +3075,7 @@ class PDFConMembrete(FPDF):
         ancho_disponible = self.w - (self.l_margin + self.r_margin)
         try:
             self.image(
-                "C:/Users/monster/Desktop/src/server/routes/imagenes/OFICIOS-CORPOANDES-1.png",
+            (resource_path("server/routes/imagenes/OFICIOS-CORPOANDES-1.png")),
                 x=self.l_margin,
                 y=self.get_y(),
                 w=ancho_disponible,
@@ -3952,15 +3958,10 @@ def mostrar_menu():
 
    
     try:
-        ventana.logo_agregar_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/agregar-producto.png").subsample(3, 3)
-       
-
-        ventana.logo_salida_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/espera.png").subsample(3, 3)
-      
-
-        ventana.logo_mostrar_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/inventario.png").subsample(3, 3)
-       
-        ventana.logo_consumo_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/consumo.png").subsample(3, 3)
+        ventana.logo_agregar_img = tk.PhotoImage(file=resource_path("server/routes/imagenes/agregar-producto.png")).subsample(3, 3)
+        ventana.logo_salida_img = tk.PhotoImage(file=resource_path("server/routes/imagenes/espera.png")).subsample(3, 3)
+        ventana.logo_mostrar_img = tk.PhotoImage(file=resource_path("server/routes/imagenes/inventario.png")).subsample(3, 3)
+        ventana.logo_consumo_img = tk.PhotoImage(file=resource_path("server/routes/imagenes/consumo.png")).subsample(3, 3)  
         
 
     except tk.TclError as e:
@@ -4011,7 +4012,7 @@ def mostrar_menu():
 
    
     try:
-        ventana.logo_app_img = tk.PhotoImage(file="C:/Users/monster/Desktop/src/server/routes/imagenes/NEVA.png").subsample(4, 4) 
+        ventana.logo_app_img = tk.PhotoImage(file=resource_path("server/routes/imagenes/NEVA.png")).subsample(4, 4) 
         logo_app_label = tk.Label(ventana, image=ventana.logo_app_img, bd=0, highlightthickness=0, bg="#263238") 
         logo_app_label.image = ventana.logo_app_img 
         logo_app_label.place(relx=1.0, rely=1.0, anchor=tk.SE, x=-10, y=-10) 
