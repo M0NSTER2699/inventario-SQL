@@ -3245,10 +3245,10 @@ def realizar_copia_seguridad(ventana_config):
         return
     test_connection.close()
 
-    _host = "127.0.0.1"
-    _user = "root"
-    _password = ""
-    _database = "sistema inventario corpoandes" 
+    _host = "192.168.0.5"
+    _user = "almacen"
+    _password = "Almacen*"
+    _database = "corpoandes_base_datos_almacen" 
 
     try:
         ruta_guardar = filedialog.asksaveasfilename(
@@ -3306,6 +3306,7 @@ def _ejecutar_restauracion_en_hilo(ruta_archivo, _host, _user, _password, _datab
             mysql_path,
             f"-h{_host}",
             f"-u{_user}",
+            
             _database
         ]
 
@@ -3330,10 +3331,10 @@ def restaurar_copia_seguridad(ventana_config):
     Inicia el proceso de restauración de la base de datos en un hilo separado
     para evitar que la interfaz de usuario se congele.
     """
-    _host = "127.0.0.1"
-    _user = "root"
-    _password = ""
-    _database = "sistema inventario corpoandes"
+    _host = "192.168.0.5"
+    _user = "almacen"
+    _password = "Almacen*"
+    _database = "corpoandes_base_datos_almacen"
     
     
     mysql_path = r"C:\xampp\mysql\bin\mysql.exe" 
