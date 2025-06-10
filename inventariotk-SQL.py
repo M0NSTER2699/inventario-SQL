@@ -1199,6 +1199,8 @@ def mostrar_inventario(ventana):
     entry_busqueda = ttk.Entry(frame_busqueda, style="CustomEntry.TEntry")
     entry_busqueda.pack(side=tk.LEFT)
 
+   
+
   
     categorias_mostrar = ["Todas"]
     mydb = conectar_mysql()
@@ -1810,12 +1812,21 @@ def generar_reporte_bajo_stock():
                         #GENERA UNA VENTANA CON TODAS LAS ENTRADAS DE PRODUCTOS
 def generar_reporte_entradas():
     """Genera un reporte del historial de entradas desde la base de datos MySQL con búsqueda y filtro por categoría."""
+    # Asume que 'ventana' es la ventana principal de la aplicación, definida globalmente o pasada.
+    # Si 'ventana' no es global, deberías pasarla como argumento a esta función.
+    # Por ahora, usaré un placeholder si no está definida.
+    try:
+        global ventana # Intenta usar la ventana global
+    except NameError:
+        ventana = tk.Tk() # Crea una ventana principal si no existe para la prueba
+        ventana.withdraw() # La esconde si es solo para que Toplevel funcione
+
     ventana_reporte = tk.Toplevel(ventana)
     ventana_reporte.title("Reporte de Entradas")
     ventana_reporte.geometry("1000x600")
     ventana_reporte.configure(bg="#A9A9A9")
 
-    
+
     style = ttk.Style(ventana_reporte)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -1826,17 +1837,16 @@ def generar_reporte_entradas():
     style.configure("TCombobox", foreground="#000000", background="#ffffff", fieldbackground="#ffffff", insertcolor="#000000", font=("Segoe UI", 10))
 
 
-    
     frame_controles = tk.Frame(ventana_reporte, bg="#A9A9A9")
     frame_controles.pack(pady=10, padx=10, fill=tk.X)
 
-    
+
     ttk.Label(frame_controles, text="Buscar:", style="CustomLabel.TLabel").pack(side=tk.LEFT)
     entry_busqueda = ttk.Entry(frame_controles, style="CustomEntry.TEntry")
     entry_busqueda.pack(side=tk.LEFT, padx=(0, 10))
 
-   
-    categorias_mostrar = ["Todas las categorías"] 
+
+    categorias_mostrar = ["Todas las categorías"]
     mydb = conectar_mysql()
     if mydb:
         cursor = mydb.cursor()
@@ -1853,55 +1863,55 @@ def generar_reporte_entradas():
     categoria_seleccionada_reporte = tk.StringVar(frame_controles)
     categoria_seleccionada_reporte.set(categorias_mostrar[0])
     menu_categorias_reporte = ttk.Combobox(frame_controles,
-                                            textvariable=categoria_seleccionada_reporte,
-                                            values=categorias_mostrar,
-                                            style="TCombobox",
-                                            state="readonly") 
+                                           textvariable=categoria_seleccionada_reporte,
+                                           values=categorias_mostrar,
+                                           style="TCombobox",
+                                           state="readonly")
     menu_categorias_reporte.pack(side=tk.LEFT, padx=(0, 10))
 
-    
+    # --- NUEVO: Botón para Exportar a PDF ---
+    boton_exportar_pdf = ttk.Button(frame_controles, text="Exportar a PDF",
+                                    command=lambda: exportar_tabla_pdf(tabla_entradas, "Historial de Entradas"))
+    boton_exportar_pdf.pack(side=tk.RIGHT, padx=(10, 0))
 
 
-    
     frame_tabla_contenedor = tk.Frame(ventana_reporte, bg="#A9A9A9")
     frame_tabla_contenedor.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    
+
     tabla_entradas = ttk.Treeview(frame_tabla_contenedor,
                                   columns=("Código", "Producto", "Cantidad", "Unidad Medida", "Fecha", "Destino", "EntradaID"),
                                   show="headings",
                                   style="Grid.Treeview")
-    tabla_entradas.column("EntradaID", width=0, stretch=tk.NO) 
+    tabla_entradas.column("EntradaID", width=0, stretch=tk.NO)
 
-    
+
     tabla_entradas.heading("Código", text="Código", anchor=tk.W)
     tabla_entradas.heading("Producto", text="Producto", anchor=tk.W)
     tabla_entradas.heading("Cantidad", text="Cantidad", anchor=tk.W)
-    tabla_entradas.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W) 
+    tabla_entradas.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
     tabla_entradas.heading("Fecha", text="Fecha", anchor=tk.W)
     tabla_entradas.heading("Destino", text="Destino", anchor=tk.W)
 
-    
+
     tabla_entradas.column("Código", width=100)
-    tabla_entradas.column("Producto", width=180) 
+    tabla_entradas.column("Producto", width=180)
     tabla_entradas.column("Cantidad", width=80)
-    tabla_entradas.column("Unidad Medida", width=100) 
+    tabla_entradas.column("Unidad Medida", width=100)
     tabla_entradas.column("Fecha", width=100)
     tabla_entradas.column("Destino", width=150)
 
 
-    
     scrollbar_vertical = ttk.Scrollbar(frame_tabla_contenedor, orient="vertical", command=tabla_entradas.yview)
-    scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y) 
+    scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y)
     tabla_entradas.configure(yscrollcommand=scrollbar_vertical.set)
 
-    
-    tabla_entradas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True) 
+
+    tabla_entradas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 
-    
     def cargar_entradas(filtro_busqueda="", categoria_filtro="Todas las categorías"):
-        for item in tabla_entradas.get_children(): 
+        for item in tabla_entradas.get_children():
             tabla_entradas.delete(item)
 
         mydb = conectar_mysql()
@@ -1916,8 +1926,8 @@ def generar_reporte_entradas():
                     e.CodigoProducto,
                     p.Nombre AS NombreProducto,
                     e.Cantidad,
-                    p.UnidadMedida,  -- <--- Obtenemos la Unidad de Medida del producto
-                   e.FechaEntrada, 
+                    p.UnidadMedida,
+                    e.FechaEntrada,
                     e.Destino,
                     e.EntradaID
                 FROM
@@ -1939,13 +1949,12 @@ def generar_reporte_entradas():
                 sql_query += " AND c.NombreCategoria = %s"
                 params.append(categoria_filtro)
 
-            sql_query += " ORDER BY e.FechaEntrada DESC, e.EntradaID DESC" 
+            sql_query += " ORDER BY e.FechaEntrada DESC, e.EntradaID DESC"
 
             cursor.execute(sql_query, tuple(params))
             registros = cursor.fetchall()
 
             for registro in registros:
-                
                 tabla_entradas.insert("", "end", values=registro)
 
         except mysql.connector.Error as err:
@@ -1955,44 +1964,37 @@ def generar_reporte_entradas():
                 cursor.close()
                 mydb.close()
 
-    
+
     def aplicar_filtro(*args):
         filtro_busqueda = entry_busqueda.get().strip()
         categoria_filtro = categoria_seleccionada_reporte.get()
         cargar_entradas(filtro_busqueda, categoria_filtro)
 
-    
-    entry_busqueda.bind("<KeyRelease>", aplicar_filtro) 
+
+    entry_busqueda.bind("<KeyRelease>", aplicar_filtro)
     menu_categorias_reporte.bind("<<ComboboxSelected>>", aplicar_filtro)
 
-    
+
     cargar_entradas()
 
-    
-    
 
-    
-
-   
-    
-
-    
     def mostrar_menu_contextual(event):
         """
         Muestra el menú contextual de clic derecho solo si el usuario es administrador.
         """
         global current_user_role_is_admin
 
-        if current_user_role_is_admin: 
+        if current_user_role_is_admin:
             item = tabla_entradas.identify_row(event.y)
             if item:
                 tabla_entradas.selection_set(item)
-                menu_contextual.post(event.x_root, event.y_root)
+                # Aquí necesitarías definir 'menu_contextual' si aún no lo tienes
+                # menu_contextual.post(event.x_root, event.y_root)
+                messagebox.showinfo("Menú Contextual", "Menú contextual activado (simulado).", parent=ventana_reporte)
         else:
-           
-            messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial.")
+            messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial.", parent=ventana_reporte)
 
-  
+
     tabla_entradas.bind("<Button-3>", mostrar_menu_contextual)
     ventana_reporte.mainloop()
 
@@ -2206,21 +2208,23 @@ def actualizar_tabla_salidas_espera(filtro_busqueda=""):
 
 def generar_reporte_salidas_espera():
     """Genera o trae al frente la ventana del reporte de salidas en espera desde la base de datos."""
-    global ventana_reporte_salidas_espera, tabla_salidas_espera
+    global ventana_reporte_salidas_espera, tabla_salidas_espera, entry_busqueda_espera, ventana # Asegúrate de que 'ventana' sea global
 
     if ventana_reporte_salidas_espera and ventana_reporte_salidas_espera.winfo_exists():
         ventana_reporte_salidas_espera.lift()
-        
-        filtro_actual = entry_busqueda_espera.get().strip() 
-        actualizar_tabla_salidas_espera(filtro_actual)
+        # Asegúrate de que entry_busqueda_espera esté inicializado antes de usarlo
+        if entry_busqueda_espera:
+            filtro_actual = entry_busqueda_espera.get().strip()
+            actualizar_tabla_salidas_espera(filtro_actual)
         return
 
+    # Si la ventana no existe, crearla
     ventana_reporte_salidas_espera = tk.Toplevel(ventana)
     ventana_reporte_salidas_espera.title("Reporte de Salidas en Espera")
-    ventana_reporte_salidas_espera.geometry("800x500") 
+    ventana_reporte_salidas_espera.geometry("800x500")
     ventana_reporte_salidas_espera.configure(bg="#A9A9A9")
 
-    
+
     style = ttk.Style(ventana_reporte_salidas_espera)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
@@ -2230,18 +2234,30 @@ def generar_reporte_salidas_espera():
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
     style.configure("TCombobox", foreground="#000000", background="#ffffff", fieldbackground="#ffffff", insertcolor="#000000", font=("Segoe UI", 10))
 
-    
+
     frame_controles = tk.Frame(ventana_reporte_salidas_espera, bg="#A9A9A9")
     frame_controles.pack(pady=10, padx=10, fill=tk.X)
 
     ttk.Label(frame_controles, text="Buscar:", style="CustomLabel.TLabel").pack(side=tk.LEFT)
-    entry_busqueda_espera = ttk.Entry(frame_controles, style="CustomEntry.TEntry") 
+    entry_busqueda_espera = ttk.Entry(frame_controles, style="CustomEntry.TEntry")
     entry_busqueda_espera.pack(side=tk.LEFT, padx=(0, 10), expand=True, fill=tk.X)
 
-    
-    tabla_salidas_espera = ttk.Treeview(ventana_reporte_salidas_espera, columns=("Código", "Producto", "Cantidad", "Departamento", "EsperaID"), show="headings", style="Grid.Treeview")
-    tabla_salidas_espera.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-    tabla_salidas_espera.column("EsperaID", width=0, stretch=tk.NO) 
+    # --- NUEVO: Botón de Exportar a PDF ---
+    boton_exportar_pdf_espera = ttk.Button(frame_controles, text="Exportar a PDF",
+                                           command=lambda: exportar_tabla_pdf(tabla_salidas_espera, "Reporte de Salidas en Espera"))
+    boton_exportar_pdf_espera.pack(side=tk.RIGHT, padx=(10, 0))
+
+
+    # Frame para la tabla y la scrollbar
+    frame_tabla_contenedor = tk.Frame(ventana_reporte_salidas_espera, bg="#A9A9A9")
+    frame_tabla_contenedor.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    # Definición de la tabla
+    tabla_salidas_espera = ttk.Treeview(frame_tabla_contenedor,
+                                        columns=("Código", "Producto", "Cantidad", "Departamento", "EsperaID"),
+                                        show="headings",
+                                        style="Grid.Treeview")
+    tabla_salidas_espera.column("EsperaID", width=0, stretch=tk.NO)
 
     tabla_salidas_espera.heading("Código", text="Código", anchor=tk.W)
     tabla_salidas_espera.heading("Producto", text="Producto", anchor=tk.W)
@@ -2253,26 +2269,25 @@ def generar_reporte_salidas_espera():
     tabla_salidas_espera.column("Cantidad", width=100)
     tabla_salidas_espera.column("Departamento", width=200)
 
-    scrollbar_vertical = ttk.Scrollbar(ventana_reporte_salidas_espera, orient="vertical", command=tabla_salidas_espera.yview)
-    
-    scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=10)
+    scrollbar_vertical = ttk.Scrollbar(frame_tabla_contenedor, orient="vertical", command=tabla_salidas_espera.yview)
+    scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y)
     tabla_salidas_espera.configure(yscrollcommand=scrollbar_vertical.set)
-    
-    tabla_salidas_espera.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+    tabla_salidas_espera.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    
 
     def agregar_requisicion():
         item_seleccionado = tabla_salidas_espera.selection()
         if item_seleccionado:
             item = item_seleccionado[0]
             values = tabla_salidas_espera.item(item, "values")
-            
+
+            # Asegurarse de que los índices de 'values' sean correctos
+            # ("Código", "Producto", "Cantidad", "Departamento", "EsperaID")
             if len(values) >= 5:
                 codigo_producto = values[0]
-                producto_nombre = values[1] 
-                cantidad_salida = float(values[2]) 
+                producto_nombre = values[1]
+                cantidad_salida = float(values[2])
                 departamento_nombre = values[3]
                 espera_id = values[4]
 
@@ -2293,7 +2308,7 @@ def generar_reporte_salidas_espera():
                     if mydb:
                         cursor = mydb.cursor()
                         try:
-                            
+                            # Obtener ProductoID y Stock
                             cursor.execute("SELECT ProductoID, Stock FROM productos WHERE Codigo = %s", (codigo_producto,))
                             resultado_prod = cursor.fetchone()
                             if not resultado_prod:
@@ -2302,12 +2317,12 @@ def generar_reporte_salidas_espera():
                             producto_id_para_salida = resultado_prod[0]
                             stock_actual = resultado_prod[1]
 
-                           
+                            # Validar stock
                             if stock_actual < cantidad_salida:
                                 messagebox.showerror("Error de Stock", f"No hay suficiente stock para el producto '{producto_nombre}'. Stock actual: {stock_actual}. Cantidad solicitada: {cantidad_salida}.")
                                 return
 
-                            
+                            # Obtener DepartamentoID
                             cursor.execute("SELECT DepartamentoID FROM departamentos WHERE NombreDepartamento = %s", (departamento_nombre,))
                             resultado_dep = cursor.fetchone()
                             if not resultado_dep:
@@ -2315,14 +2330,14 @@ def generar_reporte_salidas_espera():
                                 return
                             departamento_id_para_salida = resultado_dep[0]
 
-                            
+                            # Insertar en salidas
                             query_insert_salida = """
                                 INSERT INTO salidas (ProductoID, CodigoProducto, Cantidad, FechaSalida, DepartamentoID, NumeroRequisicion)
                                 VALUES (%s, %s, %s, %s, %s, %s)
                             """
                             cursor.execute(query_insert_salida, (producto_id_para_salida, codigo_producto, cantidad_salida, fecha_salida, departamento_id_para_salida, numero_requisicion))
 
-                            
+                            # Actualizar stock en productos
                             query_update_producto = """
                                 UPDATE productos
                                 SET Stock = Stock - %s, FechaSalida = %s, DepartamentoID = %s
@@ -2330,7 +2345,7 @@ def generar_reporte_salidas_espera():
                             """
                             cursor.execute(query_update_producto, (cantidad_salida, fecha_salida, departamento_id_para_salida, producto_id_para_salida))
 
-                            
+                            # Eliminar de salidas_espera
                             query_eliminar_espera = "DELETE FROM salidas_espera WHERE SalidaEsperaID = %s"
                             cursor.execute(query_eliminar_espera, (espera_id,))
 
@@ -2340,9 +2355,9 @@ def generar_reporte_salidas_espera():
                             actualizar_tabla_salidas_espera(entry_busqueda_espera.get().strip()) # Recargar con el filtro actual
                             if ventana_requisicion.winfo_exists():
                                 ventana_requisicion.destroy()
-                            
+
                         except mysql.connector.Error as err:
-                            mydb.rollback() 
+                            mydb.rollback()
                             messagebox.showerror("Error", f"Error al confirmar la requisición: {err}")
                         finally:
                             if mydb and mydb.is_connected():
@@ -2360,8 +2375,8 @@ def generar_reporte_salidas_espera():
                 tk.Label(ventana_requisicion, text="Fecha de Salida:", fg="#ffffff", bg="#A9A9A9").grid(row=1, column=0, padx=5, pady=5)
                 entry_fecha = ttk.Entry(ventana_requisicion)
                 entry_fecha.grid(row=1, column=1, padx=5, pady=5)
-                
-                entry_fecha.insert(0, datetime.date.today().strftime("%Y-%m-%d")) 
+
+                entry_fecha.insert(0, datetime.date.today().strftime("%Y-%m-%d"))
                 ttk.Button(ventana_requisicion, text="Calendario", command=lambda: abrir_calendario(ventana_requisicion, entry_fecha)).grid(row=1, column=2, padx=5, pady=5)
 
                 ttk.Button(ventana_requisicion, text="Confirmar", command=confirmar_requisicion).grid(row=2, column=0, columnspan=3, pady=10)
@@ -2395,7 +2410,7 @@ def generar_reporte_salidas_espera():
             entry_producto = ttk.Entry(ventana_edicion)
             entry_producto.grid(row=1, column=1, padx=5, pady=5)
             entry_producto.insert(0, producto_actual)
-            entry_producto.config(state="readonly") 
+            entry_producto.config(state="readonly")
 
             tk.Label(ventana_edicion, text="Cantidad:", fg="#ffffff", bg="#A9A9A9").grid(row=2, column=0, padx=5, pady=5)
             entry_cantidad = ttk.Entry(ventana_edicion)
@@ -2403,16 +2418,16 @@ def generar_reporte_salidas_espera():
             entry_cantidad.insert(0, cantidad_actual)
 
             tk.Label(ventana_edicion, text="Departamento:", fg="#ffffff", bg="#A9A9A9").grid(row=3, column=0, padx=5, pady=5)
-            
+
             departamentos_disponibles = obtener_departamentos()
             combo_departamento = ttk.Combobox(ventana_edicion, values=departamentos_disponibles, state="readonly")
             combo_departamento.grid(row=3, column=1, padx=5, pady=5)
-            combo_departamento.set(departamento_actual_nombre) 
+            combo_departamento.set(departamento_actual_nombre)
 
             def guardar_cambios():
-                
+
                 try:
-                    cantidad_editada = float(entry_cantidad.get()) 
+                    cantidad_editada = float(entry_cantidad.get())
                 except ValueError:
                     messagebox.showerror("Error", "Cantidad debe ser un número (entero o decimal).")
                     return
@@ -2424,8 +2439,12 @@ def generar_reporte_salidas_espera():
                     try:
                         # Obtener ProductoID (por si acaso el código_actual no es suficiente)
                         cursor.execute("SELECT ProductoID FROM productos WHERE Codigo = %s", (codigo_actual,))
-                        producto_id_update = cursor.fetchone()[0]
-                        
+                        resultado_prod_id = cursor.fetchone()
+                        if not resultado_prod_id:
+                            messagebox.showerror("Error", f"Producto con código '{codigo_actual}' no encontrado.")
+                            return
+                        producto_id_update = resultado_prod_id[0]
+
                         cursor.execute("SELECT DepartamentoID FROM departamentos WHERE NombreDepartamento = %s", (departamento_nombre_editado,))
                         resultado_dep = cursor.fetchone()
                         if not resultado_dep:
@@ -2437,7 +2456,7 @@ def generar_reporte_salidas_espera():
                             UPDATE salidas_espera
                             SET ProductoID = %s,
                                 Cantidad = %s,
-                                DepartamentoID = %s 
+                                DepartamentoID = %s
                             WHERE SalidaEsperaID = %s
                         """
                         cursor.execute(query_actualizar, (producto_id_update, cantidad_editada, departamento_id_editado, espera_id))
@@ -2449,7 +2468,7 @@ def generar_reporte_salidas_espera():
                         mydb.rollback()
                         messagebox.showerror("Error", f"Error al editar la solicitud: {err}")
                     except TypeError:
-                        messagebox.showerror("Error", "Producto no encontrado. Verifique los datos.")
+                        messagebox.showerror("Error", "Error al obtener ID de producto o departamento. Verifique los datos.")
                     finally:
                         if mydb and mydb.is_connected():
                             cursor.close()
@@ -2459,41 +2478,38 @@ def generar_reporte_salidas_espera():
         else:
             messagebox.showerror("Error", "Por favor, seleccione una solicitud para editar.")
 
-    
 
-    
     menu_contextual = tk.Menu(ventana_reporte_salidas_espera, tearoff=0)
-   
     menu_contextual.add_command(label="Agregar Requisición", command=agregar_requisicion)
-    
+    # Aquí puedes añadir la opción de editar si quieres que esté en el menú contextual
+    # menu_contextual.add_command(label="Editar Solicitud", command=editar_salida_espera)
+
 
     def mostrar_menu_contextual(event):
-        global current_user_role_is_admin 
+        global current_user_role_is_admin
 
-        if current_user_role_is_admin: 
+        if current_user_role_is_admin:
             item = tabla_salidas_espera.identify_row(event.y)
             if item:
                 tabla_salidas_espera.selection_set(item)
                 menu_contextual.post(event.x_root, event.y_root)
         else:
             messagebox.showinfo("Permiso Denegado", "No tiene los permisos para realizar estas acciones en el historial de salidas en espera.")
-    
+
     tabla_salidas_espera.bind("<Button-3>", mostrar_menu_contextual)
 
-    
-    def aplicar_filtro_espera(*args): 
+
+    def aplicar_filtro_espera(*args):
         filtro_busqueda = entry_busqueda_espera.get().strip()
         actualizar_tabla_salidas_espera(filtro_busqueda)
 
-    
+
     entry_busqueda_espera.bind("<KeyRelease>", aplicar_filtro_espera)
 
-    
+
     actualizar_tabla_salidas_espera()
 
-    
 
-   
     ventana_reporte_salidas_espera.grid_columnconfigure(0, weight=1)
     ventana_reporte_salidas_espera.grid_rowconfigure(0, weight=1)
 
@@ -2519,7 +2535,7 @@ def obtener_departamentos():
                 mydb.close()
     return departamentos
 
-from tkcalendar import Calendar 
+
 
 def abrir_calendario(parent, entry):
     def seleccionar_fecha():
@@ -2568,6 +2584,9 @@ def ventana_reportes():
     frame_tabla.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
     frame_tabla.grid_rowconfigure(0, weight=1)
     frame_tabla.grid_columnconfigure(0, weight=1)
+    
+
+    
 
     label_categoria = ttk.Label(frame_filtros, text="Filtrar por Categoría:", style="CustomLabel.TLabel")
     label_categoria.grid(row=0, column=0, padx=5, pady=5, sticky="w")
@@ -2697,7 +2716,7 @@ def ventana_reportes():
 
     label_stock = ttk.Label(frame_filtros, text="Filtrar por Stock:", style="CustomLabel.TLabel")
     label_stock.grid(row=2, column=0, padx=5, pady=5, sticky="w")
-    opciones_stock = ["Todos", "Bajo Stock (<= 2)", "Stock Medio (3-10)", "Stock Alto (>= 11)"]
+    opciones_stock = ["Todos", "Bajo Stock (<= 2)", "Stock Medio (3-10)", "Stock Alto (>= 11-20)"]
     stock_seleccionado = ttk.Combobox(frame_filtros, values=opciones_stock, style="TCombobox", width=25)
     stock_seleccionado.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
     stock_seleccionado.set("")
@@ -2723,8 +2742,13 @@ def ventana_reportes():
     boton_limpiar = ttk.Button(frame_tabla, text="Limpiar", command=limpiar_tabla_reporte, style="Small.TButton")
     boton_limpiar.pack(side="bottom", anchor="se", padx=10, pady=10)
 
-    def generar_reporte(): 
-        
+    # --- Lógica de Generación de Reporte (MODIFICADA PARA FILTROS INDEPENDIENTES) ---
+    def generar_reporte_filtrado():
+        # Limpiar la tabla antes de generar un nuevo reporte
+        tabla_reporte.delete(*tabla_reporte.get_children())
+        tabla_reporte["columns"] = ()
+        tabla_reporte.heading("#0", text="")
+
         categoria = categoria_seleccionada.get()
         departamento = departamento_seleccionado.get()
         stock = stock_seleccionado.get()
@@ -2734,52 +2758,69 @@ def ventana_reportes():
         fecha_inicio_dep_str = fecha_inicio_dep.get()
         fecha_fin_dep_str = fecha_fin_dep.get()
 
+        print("\n--- INICIO DE GENERAR_REPORTE_FILTRADO ---")
+        print(f"Valores RAW: Cat='{categoria}', Dep='{departamento}', Stock='{stock}', FechaICat='{fecha_inicio_cat_str}', FechaFCat='{fecha_fin_cat_str}', FechaIDep='{fecha_inicio_dep_str}', FechaFDep='{fecha_fin_dep_str}'")
+
+        # Determinar si hay alguna selección específica (no "Todas"/"Todos" y no vacío)
+        es_categoria_especifica = (categoria != "Todas" and categoria != "")
+        es_departamento_especifico = (departamento != "Todos" and departamento != "")
+        es_stock_especifico = (stock != "Todos" and stock != "")
+
+        # Determinar si hay alguna selección en un filtro (incluyendo "Todas"/"Todos" o fechas)
+        hay_filtro_categoria_o_fechas = (categoria != "" or (fecha_inicio_cat_str and fecha_fin_cat_str))
+        hay_filtro_departamento_o_fechas = (departamento != "" or (fecha_inicio_dep_str and fecha_fin_dep_str))
+        hay_filtro_stock = (stock != "") # Para stock, "" significa no seleccionado
+
+        print(f"Banderas Específicas: CatEsp={es_categoria_especifica}, DepEsp={es_departamento_especifico}, StockEsp={es_stock_especifico}")
+        print(f"Banderas Generales: HayCatOFechas={hay_filtro_categoria_o_fechas}, HayDepOFechas={hay_filtro_departamento_o_fechas}, HayStock={hay_filtro_stock}")
+
+
+        # --- Lógica de Prioridad para Generar Reporte ---
+
+        # 1. Mayor prioridad: Filtro combinado (Categoría ESPECÍFICA y Departamento ESPECÍFICO)
+        # Si ambas son específicas, se activa el reporte combinado.
+        if es_categoria_especifica and es_departamento_especifico:
+            print("DEBUG: Detectado: Filtro combinado Categoria ESPECIFICA y Departamento ESPECIFICO.")
+            generar_reporte_categoria_departamento(categoria, departamento, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte)
         
-        tabla_reporte.delete(*tabla_reporte.get_children())
-        tabla_reporte["columns"] = () 
-        tabla_reporte.heading("#0", text="") 
-
-        
-        filtros_principales_activos = []
-        if categoria != "":
-            filtros_principales_activos.append("categoria")
-        if departamento != "":
-            filtros_principales_activos.append("departamento")
-        if stock != "":
-            filtros_principales_activos.append("stock")
-
-        num_filtros_principales_activos = len(filtros_principales_activos)
-
-        
-
-        if num_filtros_principales_activos == 1:
-           
-            if "stock" in filtros_principales_activos:
-               
-                generar_reporte_de_stock(stock, categoria, departamento, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte)
-
-            elif "departamento" in filtros_principales_activos:
-             
-                generar_reporte_departamento(departamento, categoria, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte, stock)
-
-            elif "categoria" in filtros_principales_activos:
-               
-                generar_reporte_consumo_lapso_filtrado(categoria, fecha_inicio_cat_str, fecha_fin_cat_str, departamento, stock, tabla_reporte, ventana_reporte)
-
-        elif num_filtros_principales_activos > 1:
+        # 2. Siguiente prioridad: Si hay alguna actividad en el filtro de Categoría
+        # Esto incluye: una categoría específica, "Todas" en categoría, o fechas de categoría.
+        elif hay_filtro_categoria_o_fechas:
+            print("DEBUG: Detectado: Filtro de Categoria activo (específico, 'Todas', o con fechas).")
+            # tus funciones de reporte deben manejar "" o "Todas" como "no filtrar por esto"
+            generar_reporte_consumo_lapso_filtrado(categoria, fecha_inicio_cat_str, fecha_fin_cat_str, departamento, stock, tabla_reporte, ventana_reporte)
             
-            messagebox.showerror("Error de Selección",
-                                "Por favor, selecciona UN ÚNICO filtro principal (Categoría, Departamento o Stock) a la vez para generar el reporte.",
-                                parent=ventana_reporte)
+        # 3. Siguiente prioridad: Si hay alguna actividad en el filtro de Departamento
+        # Esto incluye: un departamento específico, "Todos" en departamento, o fechas de departamento.
+        elif hay_filtro_departamento_o_fechas:
+            print("DEBUG: Detectado: Filtro de Departamento activo (específico, 'Todos', o con fechas).")
+            # tus funciones de reporte deben manejar "" o "Todos" como "no filtrar por esto"
+            generar_reporte_departamento(departamento, categoria, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte, stock)
+            
+        # 4. Siguiente prioridad: Si hay alguna actividad en el filtro de Stock
+        # Esto incluye: un tipo de stock específico o "Todos" en stock.
+        elif hay_filtro_stock:
+            print("DEBUG: Detectado: Filtro de Stock activo (específico o 'Todos').")
+            # tus funciones de reporte deben manejar "" o "Todos" como "no filtrar por esto"
+            generar_reporte_de_stock(stock, categoria, departamento, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte)
+            
+        # 5. Ningún filtro significativo seleccionado
         else:
-           
+            print("DEBUG: Ningún filtro activo. Mostrando mensaje de información.")
             messagebox.showinfo("Selección de Filtros",
-                                "Por favor, selecciona una opción en Categoría, Departamento o Stock para generar un reporte.",
+                                "Por favor, selecciona al menos un criterio en Categoría, Departamento o Stock para generar un reporte filtrado, o utiliza el botón 'Generar Inventario Completo'.",
                                 parent=ventana_reporte)
-            
 
-    boton_generar_filtrado = ttk.Button(frame_filtros, text="Generar Reporte Filtrado", command=generar_reporte)
-    boton_generar_filtrado.grid(row=3, column=0, columnspan=6, pady=10)
+        print("--- FIN DE GENERAR_REPORTE_FILTRADO ---")
+
+
+    # --- Botón para Generar Reporte Filtrado ---
+    boton_generar_filtrado = ttk.Button(frame_filtros, text="Generar Reporte Filtrado", command=generar_reporte_filtrado)
+    boton_generar_filtrado.grid(row=3, column=0, columnspan=3, pady=10)
+
+    # --- Botón para Generar Reporte de Inventario Completo ---
+    boton_generar_completo = ttk.Button(frame_filtros, text="Generar Inventario Completo", command=lambda: generar_reporte_inventario_completo(tabla_reporte, ventana_reporte))
+    boton_generar_completo.grid(row=3, column=3, columnspan=3, pady=10)
 
     boton_pdf = ttk.Button(main_frame, text="Exportar a PDF", command=lambda: exportar_tabla_pdf(tabla_reporte))
     boton_pdf.grid(row=2, column=0, pady=10)
@@ -2789,6 +2830,86 @@ def ventana_reportes():
         frame_filtros.grid_columnconfigure(i, weight=1)
 
     frame_tabla.grid_columnconfigure(0, weight=1)
+
+
+
+def generar_reporte_inventario_completo(tabla, ventana):
+    """
+    Genera un reporte completo de todo el inventario existente,
+    con las mismas columnas que la interfaz 'Mostrar Inventario'.
+    """
+    tabla.delete(*tabla.get_children()) # Limpiar tabla existente
+
+    # Definir columnas para el Treeview, COINCIDIENDO con 'Mostrar Inventario'
+    columnas = ("Código", "Categoría", "Producto", "Destino Entrada", "Destino Salida",
+                "Entrada", "Salida", "Stock", "Unidad Medida", "Fecha Entrada", "Fecha Salida")
+    tabla["columns"] = columnas
+    tabla.heading("#0", text="") # Ocultar la primera columna por defecto
+
+    # Configurar encabezados y anchos de columnas en el Treeview
+    for col in columnas:
+        tabla.heading(col, text=col, anchor=tk.W)
+        if col == "Stock": tabla.column(col, width=80, anchor=tk.CENTER)
+        elif col in ("Entrada", "Salida", "Código", "Unidad Medida"): tabla.column(col, width=100, anchor=tk.CENTER)
+        elif col in ("Fecha Entrada", "Fecha Salida", "Destino Entrada", "Destino Salida"): tabla.column(col, width=120, anchor=tk.W)
+        else: tabla.column(col, width=150, anchor=tk.W)
+    tabla.column("#0", width=0, stretch=tk.NO) # Asegurar que la primera columna esté oculta
+
+    mydb = conectar_mysql()
+    if not mydb: return
+
+    cursor = mydb.cursor()
+    # Consulta para obtener todos los datos del inventario, simulando la vista 'Mostrar Inventario'
+    query = """
+        SELECT
+            p.Codigo,
+            c.NombreCategoria,
+            p.Nombre AS NombreProducto,
+            COALESCE(d_ent.NombreDepartamento, '') AS DestinoEntrada,
+            COALESCE(d_sal.NombreDepartamento, '') AS DestinoSalida,
+            COALESCE(SUM(e.Cantidad), 0) AS TotalEntradas,
+            COALESCE(SUM(s.Cantidad), 0) AS TotalSalidas,
+            p.Stock,
+            p.UnidadMedida,
+            p.FechaEntrada,
+            p.FechaSalida
+        FROM
+            productos p
+        LEFT JOIN
+            categorias c ON p.CategoriaID = c.CategoriaID
+        LEFT JOIN
+            entradas e ON p.ProductoID = e.ProductoID
+        LEFT JOIN
+            salidas s ON p.ProductoID = s.ProductoID
+        LEFT JOIN
+            departamentos d_ent ON e.DepartamentoID = d_ent.DepartamentoID
+        LEFT JOIN
+            departamentos d_sal ON s.DepartamentoID = d_sal.DepartamentoID
+        GROUP BY
+            p.ProductoID, p.Codigo, c.NombreCategoria, p.Nombre, p.Stock, p.UnidadMedida, p.FechaEntrada, p.FechaSalida, DestinoEntrada, DestinoSalida
+        ORDER BY
+            p.Codigo;
+    """
+
+    try:
+        cursor.execute(query)
+        inventario_data = cursor.fetchall()
+
+        if not inventario_data:
+            messagebox.showinfo("Sin Resultados", "No se encontraron productos en el inventario.", parent=ventana)
+            tabla["columns"] = ()
+            tabla.heading("#0", text="")
+            return
+
+        for row in inventario_data:
+            formatted_row = tuple("" if item is None else str(item) for item in row)
+            tabla.insert("", tk.END, values=formatted_row)
+
+    except mysql.connector.Error as err:
+        messagebox.showerror("Error", f"Error al generar el reporte de inventario completo: {err}", parent=ventana)
+    finally:
+        if cursor: cursor.close()
+        if mydb and mydb.is_connected(): mydb.close()
 
 def generar_reporte_consumo_lapso_filtrado(categoria_filtro, fecha_inicio_str, fecha_fin_str, departamento_filtro_ignorado, stock_filtro_ignorado, tabla, ventana):
     """
@@ -3053,29 +3174,215 @@ def generar_reporte_de_stock(stock_filtro_texto, categoria_filtro, departamento_
             cursor.close()
         if mydb and mydb.is_connected():
             mydb.close()
+def generar_reporte_inventario_completo(tabla, ventana):
+    """
+    Genera un reporte completo de todo el inventario existente,
+    con las mismas columnas que la interfaz 'Mostrar Inventario'.
+    """
+    tabla.delete(*tabla.get_children()) # Limpiar tabla existente
+
+    # Definir columnas para el Treeview, COINCIDIENDO con 'Mostrar Inventario'
+    columnas = ("Código", "Categoría", "Producto", "Destino Entrada", "Destino Salida",
+                "Entrada", "Salida", "Stock", "Unidad Medida", "Fecha Entrada", "Fecha Salida")
+    tabla["columns"] = columnas
+    tabla.heading("#0", text="") # Ocultar la primera columna por defecto
+
+    # Configurar encabezados y anchos de columnas en el Treeview
+    for col in columnas:
+        tabla.heading(col, text=col, anchor=tk.W)
+        if col == "Stock": tabla.column(col, width=80, anchor=tk.CENTER)
+        elif col in ("Entrada", "Salida", "Código", "Unidad Medida"): tabla.column(col, width=100, anchor=tk.CENTER)
+        elif col in ("Fecha Entrada", "Fecha Salida", "Destino Entrada", "Destino Salida"): tabla.column(col, width=120, anchor=tk.W)
+        else: tabla.column(col, width=150, anchor=tk.W)
+    tabla.column("#0", width=0, stretch=tk.NO) # Asegurar que la primera columna esté oculta
+
+    mydb = conectar_mysql()
+    if not mydb: return
+
+    cursor = mydb.cursor()
+    # Consulta para obtener todos los datos del inventario.
+    # Usa e.Destino directamente para DestinoEntrada.
+    # Usa s.DepartamentoID para unirse a 'departamentos' para DestinoSalida.
+    query = """
+        SELECT
+            p.Codigo,
+            c.NombreCategoria,
+            p.Nombre AS NombreProducto,
+            COALESCE(e.Destino, '') AS DestinoEntrada,
+            COALESCE(d_sal.NombreDepartamento, '') AS DestinoSalida,
+            COALESCE(SUM(e.Cantidad), 0) AS TotalEntradas,
+            COALESCE(SUM(s.Cantidad), 0) AS TotalSalidas,
+            p.Stock,
+            p.UnidadMedida,
+            p.FechaEntrada,
+            p.FechaSalida
+        FROM
+            productos p
+        LEFT JOIN
+            categorias c ON p.CategoriaID = c.CategoriaID
+        LEFT JOIN
+            entradas e ON p.ProductoID = e.ProductoID
+        LEFT JOIN
+            salidas s ON p.ProductoID = s.ProductoID
+        LEFT JOIN
+            departamentos d_sal ON s.DepartamentoID = d_sal.DepartamentoID
+        GROUP BY
+            p.ProductoID, p.Codigo, c.NombreCategoria, p.Nombre, p.Stock, p.UnidadMedida, p.FechaEntrada, p.FechaSalida, DestinoEntrada, DestinoSalida
+        ORDER BY
+            p.Codigo;
+    """
+
+    try:
+        cursor.execute(query)
+        inventario_data = cursor.fetchall()
+
+        if not inventario_data:
+            messagebox.showinfo("Sin Resultados", "No se encontraron productos en el inventario.", parent=ventana)
+            tabla["columns"] = ()
+            tabla.heading("#0", text="")
+            return
+
+        for row in inventario_data:
+            formatted_row = tuple("" if item is None else str(item) for item in row)
+            tabla.insert("", tk.END, values=formatted_row)
+
+    except mysql.connector.Error as err:
+        messagebox.showerror("Error", f"Error al generar el reporte de inventario completo: {err}", parent=ventana)
+    finally:
+        if cursor: cursor.close()
+        if mydb and mydb.is_connected(): mydb.close()
+def generar_reporte_categoria_departamento(categoria_filtro, departamento_filtro, fecha_inicio_str, fecha_fin_str, tabla, ventana):
+    """
+    Genera un reporte de consumo de productos de una categoría específica por un departamento específico.
+    Muestra: Categoría, Departamento, Producto, Cantidad Consumida, Unidad Medida, Lapso.
+    Incluye un total de la cantidad consumida.
+    """
+    tabla.delete(*tabla.get_children()) # Limpiar tabla existente
+
+    # Definir columnas para el Treeview del reporte combinado
+    # Añadimos "Producto" para mostrar qué producto específico se consumió, y agruparemos por él.
+    columnas_reporte = ("Categoría", "Departamento", "Producto", "Cantidad Consumida", "Unidad Medida", "Lapso")
+    tabla["columns"] = columnas_reporte
+    tabla.heading("#0", text="") # Ocultar la primera columna por defecto
+
+    tabla.heading("Categoría", text="Categoría", anchor=tk.W)
+    tabla.heading("Departamento", text="Departamento", anchor=tk.W)
+    tabla.heading("Producto", text="Producto", anchor=tk.W) # Nueva columna
+    tabla.heading("Cantidad Consumida", text="Cantidad Consumida", anchor=tk.W)
+    tabla.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
+    tabla.heading("Lapso", text="Lapso", anchor=tk.W)
+
+    # Configurar anchos de columnas
+    tabla.column("#0", width=0, stretch=tk.NO)
+    tabla.column("Categoría", width=120, anchor=tk.W)
+    tabla.column("Departamento", width=120, anchor=tk.W)
+    tabla.column("Producto", width=180, anchor=tk.W) # Ancho para el nombre del producto
+    tabla.column("Cantidad Consumida", width=120, anchor=tk.CENTER)
+    tabla.column("Unidad Medida", width=100, anchor=tk.W)
+    tabla.column("Lapso", width=150, anchor=tk.W)
+
+
+    mydb = conectar_mysql()
+    if not mydb:
+        return
+
+    cursor = mydb.cursor()
+    query = """
+        SELECT
+            cat.NombreCategoria,
+            d.NombreDepartamento,
+            p.Nombre AS NombreProducto,
+            SUM(s.Cantidad) AS CantidadConsumida,
+            p.UnidadMedida,
+            MIN(s.FechaSalida) AS FechaInicioLapso,
+            MAX(s.FechaSalida) AS FechaFinLapso
+        FROM
+            salidas s
+        JOIN
+            productos p ON s.ProductoID = p.ProductoID
+        JOIN
+            categorias cat ON p.CategoriaID = cat.CategoriaID
+        JOIN
+            departamentos d ON s.DepartamentoID = d.DepartamentoID
+        WHERE
+            cat.NombreCategoria = %s AND d.NombreDepartamento = %s
+    """
+    params = [categoria_filtro, departamento_filtro]
+
+    # Añadir filtro por fechas si están presentes (usando las fechas de departamento, ya que es consumo)
+    if fecha_inicio_str and fecha_fin_str:
+        query += " AND s.FechaSalida BETWEEN %s AND %s"
+        params.extend([fecha_inicio_str, fecha_fin_str])
+        lapso_texto_display = f"{fecha_inicio_str} al {fecha_fin_str}"
+    else:
+        lapso_texto_display = "Todo el Historial" # Se usará este lapso para todas las filas si no hay fechas
+
+    query += " GROUP BY cat.NombreCategoria, d.NombreDepartamento, p.Nombre, p.UnidadMedida"
+    query += " ORDER BY cat.NombreCategoria, d.NombreDepartamento, p.Nombre"
+
+    total_cantidad_consumida = 0
+
+    try:
+        cursor.execute(query, params)
+        reporte_data = cursor.fetchall()
+
+        if not reporte_data:
+            messagebox.showinfo("Sin Resultados", f"No se encontraron productos de la categoría '{categoria_filtro}' consumidos por el departamento '{departamento_filtro}' para los filtros seleccionados.", parent=ventana)
+            # Limpiar columnas si no hay datos
+            tabla["columns"] = ()
+            tabla.heading("#0", text="")
+            return
+
+        for row in reporte_data:
+            categoria_nombre, departamento_nombre, producto_nombre, cantidad_consumida, unidad_medida, _, _ = row
+            # La fecha de lapso es la misma para todas las filas si no se especificó un rango
+            # Si se especificó un rango, se aplica ese lapso_texto_display a todas las filas
+            tabla.insert("", tk.END, values=(categoria_nombre, departamento_nombre, producto_nombre, cantidad_consumida, unidad_medida, lapso_texto_display))
+            total_cantidad_consumida += cantidad_consumida
+
+        # Insertar la fila de total al final
+        # Se pueden aplicar estilos para que se vea como un resumen
+        tabla.insert("", tk.END, values=("", "", "TOTAL CONSUMIDO:", total_cantidad_consumida, "", ""), tags=('total_row',))
+        tabla.tag_configure('total_row', background='#E0FFFF', font=('Segoe UI', 10, 'bold')) # Color y estilo para el total
+
+    except mysql.connector.Error as err:
+        messagebox.showerror("Error", f"Error al generar el reporte combinado de categoría y departamento: {err}", parent=ventana)
+    finally:
+        if cursor:
+            cursor.close()
+        if mydb and mydb.is_connected():
+            mydb.close()
+
+
         
 class PDFConMembrete(FPDF):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, titulo_reporte="Reporte General", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.membrete_superior_altura = 20
         self.membrete_inferior_altura = 15
-        self.margen_horizontal = 5  
+        self.margen_horizontal = 5
         self.espacio_entre_tabla_y_membrete = 15
         self.altura_encabezados = 10
-        self.altura_fila = 7  
+        self.altura_fila = 7
+        # Ajusta self.y_despues_membrete_superior para el título
         self.y_despues_membrete_superior = 5 + self.membrete_superior_altura + self.espacio_entre_tabla_y_membrete
         self.filas_por_pagina = self.calcular_filas_por_pagina()
+        self.titulo_reporte = titulo_reporte # Nueva propiedad para el título
 
     def calcular_filas_por_pagina(self):
-        altura_disponible = self.h - self.t_margin - self.b_margin - self.membrete_inferior_altura - self.y_despues_membrete_superior - self.altura_encabezados - 5
+        # Altura disponible después del margen superior, margen inferior, membrete inferior y el espacio para el título y los encabezados de la tabla
+        altura_disponible = self.h - self.t_margin - self.b_margin - self.membrete_inferior_altura - \
+                           (self.membrete_superior_altura + self.espacio_entre_tabla_y_membrete + 10 + 5) - \
+                           self.altura_encabezados - 5 # 10 para el título, 5 de padding
         return int(altura_disponible / self.altura_fila)
 
     def header(self):
         self.set_y(5)
         ancho_disponible = self.w - (self.l_margin + self.r_margin)
         try:
+            # Asegúrate de que esta ruta sea accesible por PyInstaller
             self.image(
-            (resource_path("server/routes/imagenes/OFICIOS-CORPOANDES-1.png")),
+                resource_path("server/routes/imagenes/OFICIOS-CORPOANDES-1.png"),
                 x=self.l_margin,
                 y=self.get_y(),
                 w=ancho_disponible,
@@ -3084,10 +3391,12 @@ class PDFConMembrete(FPDF):
         except FileNotFoundError:
             self.set_font("Arial", 'B', 10)
             self.cell(0, 10, "¡Error: Membrete superior no encontrado!", ln=1, align='C')
+        self.set_y(self.membrete_superior_altura + 10)
+        self.print_titulo()
 
     def footer(self):
         self.set_y(-1 * (self.membrete_inferior_altura + 10))
-        self.set_x(self.margen_horizontal)
+        self.set_x(self.l_margin)
         self.set_font("Arial", 'I', 8)
         self.cell(
             0,
@@ -3102,119 +3411,176 @@ class PDFConMembrete(FPDF):
         self.cell(
             0, 5, "Correo corpoandespresidencia@gmail.com", ln=1, align="C"
         )
+        self.set_y(-15)
+        self.set_font("Arial", "I", 8)
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, 'R')
+
 
     def print_titulo(self):
         self.set_font("Arial", 'B', 16)
-        self.cell(0, 10, "Reporte General de inventario", ln=1, align='C')
+        self.cell(0, 10, self.titulo_reporte, ln=1, align='C')
         self.set_font("Arial", size=10)
 
     def print_encabezados_tabla(self, headers, col_widths, x_start):
         self.set_x(x_start)
-        self.set_font("Arial", 'B', 8)  
+        self.set_font("Arial", 'B', 8)
         self.set_fill_color(200, 220, 255)
         self.set_text_color(0, 0, 0)
         for i, header in enumerate(headers):
-            self.cell(col_widths[i], 8, txt=header, border=1, align='C', fill=True)  
+            self.cell(col_widths[i], self.altura_encabezados, txt=header, border=1, align='C', fill=True, new_x="RIGHT", new_y="TOP")
         self.ln()
 
-
-
-
-
-                                    #ME GENERA UN PDF
-def exportar_tabla_pdf(tabla_treeview):
-    """Exporta los datos del Treeview a un PDF con membrete según el diseño y lo abre en el navegador."""
+# --- TU FUNCIÓN exportar_tabla_pdf (CORREGIDA Y AMPLIADA) ---
+def exportar_tabla_pdf(tabla_treeview, titulo_reporte="Reporte"):
+    """
+    Exporta los datos del Treeview a un PDF con membrete según el diseño y lo abre en el navegador.
+    Ahora acepta un `titulo_reporte` para el PDF y maneja múltiples estructuras de tabla.
+    """
 
     filename = filedialog.asksaveasfilename(
         defaultextension=".pdf",
         filetypes=[("Archivos PDF", "*.pdf")],
-        title="Guardar reporte como PDF",
+        title=f"Guardar {titulo_reporte} como PDF",
     )
     if not filename:
         return
 
-    pdf = PDFConMembrete(orientation="L", unit="mm", format="A4")
-    pdf.set_margins(left=5, top=20, right=5)
-    pdf.set_auto_page_break(auto=False, margin=0)
+    pdf = PDFConMembrete(titulo_reporte=titulo_reporte, orientation="L", unit="mm", format="A4")
+    pdf.set_margins(left=5, top=5, right=5)
+    # Ajusta el margen inferior para el auto page break para dejar espacio para el footer del membrete
+    pdf.set_auto_page_break(auto=True, margin=pdf.membrete_inferior_altura + 10)
     pdf.set_font("Arial", size=7)
-    pdf.add_page()
+    pdf.add_page() # Esto llama a header() y print_titulo() automáticamente
 
-    
-    cols = tabla_treeview["columns"]
-    headers = [tabla_treeview.heading(col)["text"] for col in cols]
+    # --- Lógica para MANEJAR COLUMNAS A EXPORTAR Y SUS ENCABEZADOS ---
+    all_cols_from_treeview = tabla_treeview["columns"]
+    display_cols = [] # Nombres internos de las columnas del Treeview que queremos mostrar
+    display_headers = [] # Textos de los encabezados para el PDF
+
+    # Definir qué columnas queremos omitir de la exportación en el PDF
+    columns_to_omit = ["EntradaID", "SalidaID", "EsperaID", "SolicitudID"] # Añade todos los IDs que no quieras en el PDF
+
+    for col_name in all_cols_from_treeview:
+        if col_name not in columns_to_omit:
+            display_cols.append(col_name)
+            header_text = tabla_treeview.heading(col_name)["text"]
+            # Aquí puedes renombrar encabezados si es necesario para el PDF
+            if header_text == "Stock Actual":
+                display_headers.append("Stock")
+            elif header_text == "Cantidad Consumida":
+                display_headers.append("Cantidad")
+            elif header_text == "Depto. Solicitante": # Para salidas en espera
+                display_headers.append("Departamento")
+            else:
+                display_headers.append(header_text)
+
     available_width = pdf.w - pdf.l_margin - pdf.r_margin
-    lapso_width_fixed = 50  
     col_widths = []
 
-    new_headers = list(headers)
-    if "Stock Actual" in new_headers:
-        index_stock = new_headers.index("Stock Actual")
-        new_headers[index_stock] = "Stock"
-    if "Cantidad Consumida" in new_headers:
-        index_cantidad = new_headers.index("Cantidad Consumida")
-        new_headers[index_cantidad] = "Cantidad"
+    # Ajustar col_widths basado en los *display_headers* (los que realmente irán en el PDF)
+    # y no en los encabezados del Treeview original si tenían columnas ocultas.
 
-    if tuple(new_headers) == ("Departamento", "Producto", "Categoría", "Cantidad", "Lapso", "Stock"):
+    # Historial de Entradas (Código, Producto, Cantidad, Unidad Medida, Fecha, Destino)
+    if tuple(display_headers) == ("Código", "Producto", "Cantidad", "Unidad Medida", "Fecha", "Destino"):
         col_widths = [
-            available_width * 0.15,  
-            available_width * 0.30,  
-            available_width * 0.15, 
-            available_width * 0.10,  
-            lapso_width_fixed,      
-            available_width * 0.10,  
+            available_width * 0.10, # Código
+            available_width * 0.25, # Producto
+            available_width * 0.10, # Cantidad
+            available_width * 0.15, # Unidad Medida
+            available_width * 0.15, # Fecha
+            available_width * 0.25, # Destino
         ]
-    elif tuple(new_headers) == ("Categoría", "Producto", "Cantidad", "Lapso", "Stock"):
+    # Historial de Salidas (ID Salida, Producto, Cantidad, Departamento, Fecha Salida)
+    elif tuple(display_headers) == ("ID Salida", "Producto", "Cantidad", "Departamento", "Fecha Salida"):
+        col_widths = [
+            available_width * 0.10, # ID Salida
+            available_width * 0.30, # Producto
+            available_width * 0.10, # Cantidad
+            available_width * 0.25, # Departamento
+            available_width * 0.25, # Fecha Salida
+        ]
+    # Salidas en Espera (Código, Producto, Cantidad, Departamento)
+    elif tuple(display_headers) == ("Código", "Producto", "Cantidad", "Departamento"):
+         col_widths = [
+            available_width * 0.15, # Código
+            available_width * 0.35, # Producto
+            available_width * 0.15, # Cantidad
+            available_width * 0.35, # Departamento
+        ]
+    # Puedes añadir más condiciones elif para otros tipos de reportes:
+    # Ejemplo para Reporte de Inventario (Departamento, Producto, Categoría, Cantidad, Lapso, Stock)
+    elif tuple(display_headers) == ("Departamento", "Producto", "Categoría", "Cantidad", "Lapso", "Stock"):
+        lapso_width_fixed = 50 # Un ejemplo de ancho fijo
+        # Calculate remaining width for other columns
         remaining_width = available_width - lapso_width_fixed
         col_widths = [
-            remaining_width * 0.15,  
-            remaining_width * 0.30,  
-            remaining_width * 0.10, 
-            lapso_width_fixed,      
-            remaining_width * 0.10,  
+            remaining_width * 0.15,
+            remaining_width * 0.30,
+            remaining_width * 0.15,
+            remaining_width * 0.10,
+            lapso_width_fixed, # Lapso
+            remaining_width * 0.10,
         ]
+    # Fallback genérico si no coincide con ninguna de las estructuras esperadas
     else:
-        
-        col_widths = [available_width / len(headers)] * len(headers)
+        # Asegurarse de que len(display_headers) > 0 para evitar división por cero
+        if len(display_headers) > 0:
+            col_widths = [available_width / len(display_headers)] * len(display_headers)
+        else:
+            print("ADVERTENCIA: No hay columnas para mostrar en el PDF.")
+            messagebox.showwarning("Advertencia", "No hay datos o columnas válidas para exportar.", parent=tabla_treeview)
+            return
 
     total_width = sum(col_widths)
     x_start = (pdf.w - total_width) / 2
-    row_height = 7
+    row_height = pdf.altura_fila
 
-    
-    pdf.set_text_color(0, 0, 0)
-    items = tabla_treeview.get_children()
-    num_items = len(items)
-    filas_impresas = 0
+    # Imprimir los encabezados de la tabla
+    # Esto se hace aquí después de que el header() haya puesto el título.
+    pdf.set_y(pdf.get_y() + 5) # Pequeño espacio después del título
+    pdf.print_encabezados_tabla(display_headers, col_widths, x_start)
 
-    while filas_impresas < num_items:
-        pdf.set_y(pdf.y_despues_membrete_superior)
-        pdf.print_titulo()
-        pdf.print_encabezados_tabla(new_headers, col_widths, x_start)
+    current_y = pdf.get_y() # Obtener la posición Y actual después de los encabezados
 
-        for i in range(filas_impresas, min(filas_impresas + pdf.filas_por_pagina, num_items)):
-            child = items[i]
-            pdf.set_x(x_start)
-            if i % 2 == 0:
-                pdf.set_fill_color(240, 240, 240)
-            else:
-                pdf.set_fill_color(255, 255, 255)
-            for j, col in enumerate(cols):
-                value = tabla_treeview.set(child, col)
-                pdf.cell(col_widths[j], row_height, txt=str(value), border=1, align='L', fill=True)
-            pdf.ln()
-        filas_impresas += pdf.filas_por_pagina
-        if filas_impresas < num_items:
+    for i, child in enumerate(tabla_treeview.get_children()):
+        # Verifica si hay espacio para la siguiente fila
+        # Si no hay espacio, añadir una nueva página
+        if current_y + row_height > pdf.h - pdf.b_margin - pdf.membrete_inferior_altura - 5:
             pdf.add_page()
+            current_y = pdf.get_y() + 5 # Resetear Y después de la nueva página y título/header
+            pdf.print_encabezados_tabla(display_headers, col_widths, x_start)
+            current_y = pdf.get_y() # Actualizar Y después de imprimir los nuevos encabezados
+
+        pdf.set_x(x_start)
+        if i % 2 == 0:
+            pdf.set_fill_color(240, 240, 240)
+        else:
+            pdf.set_fill_color(255, 255, 255)
+
+        row_values = []
+        for col_name in display_cols: # Ahora iteramos sobre display_cols
+            value = tabla_treeview.set(child, col_name)
+            row_values.append(str(value))
+
+        # El check de desajuste ya no debería ser necesario si display_cols y col_widths están sincronizados
+        # sin embargo, lo mantendremos para depuración
+        if len(row_values) != len(col_widths):
+            print(f"ADVERTENCIA: Desajuste en número de columnas para la fila {i}. Valores: {row_values}, Anchos: {col_widths}")
+            continue # Salta esta fila si hay desajuste crítico
+
+        for j, value in enumerate(row_values):
+            pdf.cell(col_widths[j], row_height, txt=value, border=1, align='L', fill=True, new_x="RIGHT", new_y="TOP")
+        pdf.ln()
+        current_y = pdf.get_y() # Actualizar la posición Y después de cada fila
 
     pdf.output(filename, "F")
     messagebox.showinfo("Exportar a PDF", "Reporte exportado exitosamente a PDF.", parent=tabla_treeview)
 
-   
     try:
-        os.startfile(filename)  
+        os.startfile(filename)
     except AttributeError:
         try:
-            os.system(f"open '{filename}'") 
+            os.system(f"open '{filename}'")
         except:
             os.system(f"xdg-open '{filename}'")  
 
