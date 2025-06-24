@@ -60,6 +60,8 @@ ventana_reporte_salidas = None
 tree = None 
 entry_busqueda_salidas = None
 departamento_seleccionado_reporte = None
+ventana_consumo = None
+tabla_consumo_global_ref = None
 
 
 
@@ -1696,7 +1698,7 @@ def mostrar_inventario(ventana):
                 LEFT JOIN departamentos d ON p.DepartamentoID = d.DepartamentoID
                 WHERE p.Codigo = %s
                 LIMIT 1;
-            """
+                """
             cursor.execute(query_producto_data, (codigo_producto_seleccionado,))
             producto_data = cursor.fetchone()
 
@@ -1724,8 +1726,6 @@ def mostrar_inventario(ventana):
                 if not nueva_unidad_medida:
                     messagebox.showerror("Error", "La unidad de medida no puede estar vacía.", parent=ventana_edicion)
                     return
-
-               
 
                 try:
                     nueva_fecha_entrada = datetime.datetime.strptime(nueva_fecha_entrada_str, "%Y-%m-%d").date()
@@ -1772,18 +1772,18 @@ def mostrar_inventario(ventana):
                             Nombre = %s,
                             CategoriaID = %s,
                             UnidadMedida = %s,
-                            -- ¡IMPORTANTE!: Stock ya NO se actualiza directamente desde esta ventana de edición.
-                            -- Se gestiona a través de entradas y salidas. Por eso, se elimina 'Stock = %s,' de aquí.
+                            -- Stock ya NO se actualiza directamente desde esta ventana de edición.
+                            -- Se gestiona a través de entradas y salidas.
                             FechaEntrada = %s,
                             FechaSalida = %s,
                             DepartamentoID = %s
                         WHERE Codigo = %s
-                    """
+                        """
                     val_update = (
                         nuevo_nombre,
                         nueva_categoria_id,
                         nueva_unidad_medida,
-                       
+                        
                         nueva_fecha_entrada,
                         nueva_fecha_salida,
                         nuevo_departamento_id,
@@ -1793,6 +1793,8 @@ def mostrar_inventario(ventana):
 
                     mydb_edit.commit()
                     messagebox.showinfo("Éxito", f"Producto '{nuevo_nombre}' ({codigo_producto_seleccionado}) actualizado correctamente.", parent=ventana_edicion)
+                    
+                   
                     mostrar_tabla(categoria_seleccionada_mostrar.get(), entry_busqueda.get())
                     ventana_edicion.destroy()
 
@@ -1838,7 +1840,6 @@ def mostrar_inventario(ventana):
                         departamentos_disponibles.append(current_departamento_salida)
                         departamentos_disponibles.sort()
 
-
             except mysql.connector.Error as err:
                 messagebox.showerror("Error de BD", f"Error al cargar listas para edición: {err}", parent=ventana_edicion)
                 ventana_edicion.destroy()
@@ -1849,19 +1850,16 @@ def mostrar_inventario(ventana):
 
             row_idx = 0
 
-           
             ttk.Label(ventana_edicion, text="Código:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             ttk.Label(ventana_edicion, text=producto_data['Codigo'], style="CustomLabel.TLabel").grid(row=row_idx, column=1, padx=5, pady=5, sticky="w")
             row_idx += 1
 
-           
             ttk.Label(ventana_edicion, text="Nombre:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             entry_nombre = ttk.Entry(ventana_edicion, style="CustomEntry.TEntry")
             entry_nombre.grid(row=row_idx, column=1, padx=5, pady=5, sticky="ew")
             entry_nombre.insert(0, producto_data['Nombre'])
             row_idx += 1
 
-           
             ttk.Label(ventana_edicion, text="Categoría:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             categoria_var = tk.StringVar(ventana_edicion)
             categoria_var.set(producto_data['NombreCategoria'] if producto_data['NombreCategoria'] else (categorias_disponibles[0] if categorias_disponibles else ""))
@@ -1869,12 +1867,10 @@ def mostrar_inventario(ventana):
             combo_categoria.grid(row=row_idx, column=1, padx=5, pady=5, sticky="ew")
             row_idx += 1
 
-           
             ttk.Label(ventana_edicion, text="Destino Entrada:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             ttk.Label(ventana_edicion, text=producto_data.get('DestinoEntrada', 'N/A'), style="CustomLabel.TLabel").grid(row=row_idx, column=1, padx=5, pady=5, sticky="w")
             row_idx += 1
 
-           
             ttk.Label(ventana_edicion, text="Destino Salida:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             departamento_salida_var = tk.StringVar(ventana_edicion)
             departamento_salida_var.set(producto_data['NombreDepartamentoSalida'] if producto_data['NombreDepartamentoSalida'] else "N/A")
@@ -1882,27 +1878,24 @@ def mostrar_inventario(ventana):
             combo_departamento_salida.grid(row=row_idx, column=1, padx=5, pady=5, sticky="ew")
             row_idx += 1
 
-            
             ttk.Label(ventana_edicion, text="Última Cantidad Cant.:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
-            entry_ultima_entrada_cant = ttk.Entry(ventana_edicion, style="CustomEntry.TEntry", state='readonly') # Creado como readonly
+            entry_ultima_entrada_cant = ttk.Entry(ventana_edicion, style="CustomEntry.TEntry", state='readonly') 
             entry_ultima_entrada_cant.grid(row=row_idx, column=1, padx=5, pady=5, sticky="ew")
-           
+            
             entry_ultima_entrada_cant.configure(state='normal')
             entry_ultima_entrada_cant.insert(0, str(int(producto_data['CantidadEntrada'])) if producto_data['CantidadEntrada'] is not None else "0")
             entry_ultima_entrada_cant.configure(state='readonly')
             row_idx += 1
 
-            
             ttk.Label(ventana_edicion, text="Última Salida Cant.:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             entry_ultima_salida_cant = ttk.Entry(ventana_edicion, style="CustomEntry.TEntry", state='readonly') 
             entry_ultima_salida_cant.grid(row=row_idx, column=1, padx=5, pady=5, sticky="ew")
-           
+            
             entry_ultima_salida_cant.configure(state='normal')
             entry_ultima_salida_cant.insert(0, str(int(producto_data['CantidadSalida'])) if producto_data['CantidadSalida'] is not None else "0")
             entry_ultima_salida_cant.configure(state='readonly')
             row_idx += 1
 
-            
             ttk.Label(ventana_edicion, text="Stock Actual:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             entry_stock = ttk.Entry(ventana_edicion, style="CustomEntry.TEntry", state='readonly')
             entry_stock.grid(row=row_idx, column=1, padx=5, pady=5, sticky="ew")
@@ -1912,15 +1905,13 @@ def mostrar_inventario(ventana):
             entry_stock.configure(state='readonly')
             row_idx += 1
 
-           
             ttk.Label(ventana_edicion, text="Unidad Medida:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             unidad_medida_var = tk.StringVar(ventana_edicion)
             unidad_medida_var.set(producto_data['UnidadMedida'] if producto_data['UnidadMedida'] else "")
-            combo_unidad_medida = ttk.Combobox(ventana_edicion, textvariable=unidad_medida_var, values=unidades_medida_disponibles, style="TCombobox", state="readonly") # Tu original ya era readonly
+            combo_unidad_medida = ttk.Combobox(ventana_edicion, textvariable=unidad_medida_var, values=unidades_medida_disponibles, style="TCombobox", state="readonly") 
             combo_unidad_medida.grid(row=row_idx, column=1, padx=5, pady=5, sticky="ew")
             row_idx += 1
 
-            
             ttk.Label(ventana_edicion, text="Fecha Última Entrada:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             entry_fecha_entrada = ttk.Entry(ventana_edicion, style="CustomEntry.TEntry")
             entry_fecha_entrada.grid(row=row_idx, column=1, padx=5, pady=5, sticky="ew")
@@ -1929,7 +1920,6 @@ def mostrar_inventario(ventana):
             ttk.Button(ventana_edicion, text="Calendario", command=lambda: abrir_calendario(ventana_edicion, entry_fecha_entrada), style="CustomButton.TButton").grid(row=row_idx, column=2, padx=5, pady=5)
             row_idx += 1
 
-            
             ttk.Label(ventana_edicion, text="Fecha Última Salida:", style="CustomLabel.TLabel").grid(row=row_idx, column=0, padx=5, pady=5, sticky="w")
             entry_fecha_salida = ttk.Entry(ventana_edicion, style="CustomEntry.TEntry")
             entry_fecha_salida.grid(row=row_idx, column=1, padx=5, pady=5, sticky="ew")
@@ -1938,7 +1928,6 @@ def mostrar_inventario(ventana):
             ttk.Button(ventana_edicion, text="Calendario", command=lambda: abrir_calendario(ventana_edicion, entry_fecha_salida), style="CustomButton.TButton").grid(row=row_idx, column=2, padx=5, pady=5)
             row_idx += 1
 
-            
             ttk.Button(ventana_edicion, text="Guardar Cambios", command=confirmar_edicion, style="CustomButton.TButton").grid(row=row_idx, column=0, columnspan=3, pady=15, padx=5, sticky="ew")
             ventana_edicion.grid_columnconfigure(1, weight=1)
             ventana_edicion.wait_window()
@@ -2045,102 +2034,54 @@ def mostrar_inventario(ventana):
     
 
                          #MUESTRA EL CONSUMO QUE A TENIDO CADA DEPARTAMENTO
-def calcular_consumo_departamento():
-    """Calcula el consumo semanal y mensual por departamento y en general desde la base de datos."""
-   
-    
-    consumo_semanal = calcular_consumo_periodo(datetime.timedelta(weeks=1))
-    consumo_mensual = calcular_consumo_periodo(datetime.timedelta(days=30))
 
-    
-    mostrar_consumo_periodos(consumo_semanal, consumo_mensual)
 
-def mostrar_consumo_periodos(consumo_semanal, consumo_mensual):
-    """Muestra el consumo para los dos períodos en una tabla (Semanal y Mensual)."""
-    ventana_consumo = tk.Toplevel(ventana)
-    ventana_consumo.title("Consumo por Período")
-    ventana_consumo.configure(bg="#A9A9A9")
 
-    style = ttk.Style(ventana_consumo)
-    style.theme_use('clam')
-    style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
-    style.configure("Grid.Treeview", foreground="#000000", background="#ffffff", font=("Segoe UI", 10))
-    style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
-    style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
 
-    
-    tabla_consumo = ttk.Treeview(ventana_consumo, columns=("Departamento", "Código", "Producto", "Semanal", "Mensual", "Unidad Medida", "Porcentaje"), show="headings", style="Grid.Treeview")
-    tabla_consumo.pack(fill=tk.BOTH, expand=True)
-
-   
-    tabla_consumo.heading("Departamento", text="Departamento", anchor=tk.W)
-    tabla_consumo.heading("Código", text="Código", anchor=tk.W)
-    tabla_consumo.heading("Producto", text="Producto", anchor=tk.W)
-    tabla_consumo.heading("Semanal", text="Semanal", anchor=tk.W) 
-    tabla_consumo.heading("Mensual", text="Mensual", anchor=tk.W)
-    tabla_consumo.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
-    tabla_consumo.heading("Porcentaje", text="Porcentaje", anchor=tk.W)
-
-   
-    tabla_consumo.column("Departamento", width=150)
-    tabla_consumo.column("Código", width=100)
-    tabla_consumo.column("Producto", width=150)
-    tabla_consumo.column("Semanal", width=80) 
-    tabla_consumo.column("Mensual", width=80) 
-    tabla_consumo.column("Unidad Medida", width=100)
-    tabla_consumo.column("Porcentaje", width=100)
-
-    datos_consumo_guardar = [] 
-
-    departamentos = set()
-    codigos_consumidos = set()
-    consumo_total_general = 0
-
-   
-    for periodo_data, total_periodo in [consumo_semanal, consumo_mensual]:
-        if periodo_data: 
-            departamentos.update(periodo_data.keys())
-            for productos_departamento in periodo_data.values():
-                codigos_consumidos.update(productos_departamento.keys())
-            consumo_total_general += total_periodo 
-
+def obtener_meses_anios_disponibles_db():
+    """
+    Obtiene una lista de meses y años únicos de las fechas de salida desde la base de datos.
+    Esta es una función de apoyo para el Combobox de filtro.
+    """
+    years_months = set()
     mydb = conectar_mysql()
     if mydb:
         cursor = mydb.cursor()
-        for departamento in sorted(list(departamentos)):
-            for codigo in sorted(list(codigos_consumidos)):
-               
-                semanal = consumo_semanal[0].get(departamento, {}).get(codigo, 0)
-                mensual = consumo_mensual[0].get(departamento, {}).get(codigo, 0)
-
-               
-                cursor.execute("SELECT Nombre, UnidadMedida FROM productos WHERE Codigo = %s", (codigo,))
-                producto_info = cursor.fetchone()
-                nombre_producto = producto_info[0] if producto_info else "N/A"
-                unidad_medida = producto_info[1] if producto_info else "N/A"
-
-               
-                total_consumo_producto = semanal + mensual 
-
-                
-                porcentaje = (total_consumo_producto / consumo_total_general) * 100 if consumo_total_general > 0 else 0
-
-                
-                values = (departamento, codigo, nombre_producto, semanal, mensual, unidad_medida, f"{porcentaje:.2f}%")
-                tabla_consumo.insert("", tk.END, values=values)
-        cursor.close()
-        mydb.close()
-
+        try:
+            cursor.execute("SELECT DISTINCT YEAR(FechaSalida), MONTH(FechaSalida) FROM salidas ORDER BY YEAR(FechaSalida) DESC, MONTH(FechaSalida) DESC")
+            results = cursor.fetchall()
+            for year, month in results:
+                years_months.add(f"{month:02d}-{year}") 
+        except mysql.connector.Error as err:
+            messagebox.showerror("Error de BD", f"Error al obtener meses/años disponibles: {err}")
+        finally:
+            cursor.close()
+            mydb.close()
+    return sorted(list(years_months), reverse=True)
 
 def calcular_consumo_periodo(periodo):
-    """Calcula el consumo para un período específico desde la base de datos MySQL,
-       utilizando el código del producto como clave, solo desde la tabla de salidas.
+    """
+    Calcula el consumo para un período específico desde la base de datos MySQL,
+    utilizando el código del producto como clave, solo desde la tabla de salidas.
+    'periodo' puede ser un datetime.timedelta O una tupla (start_date, end_date).
+    Retorna un diccionario anidado con consumo por departamento/código de producto
+    y el total general para ese período.
     """
     consumo_departamentos = {}
     total_consumo = 0
-    fecha_actual = datetime.date.today()
-    fecha_inicio = fecha_actual - periodo
     
+    fecha_actual = datetime.date.today()
+    start_date = None
+    end_date = None
+
+    if isinstance(periodo, datetime.timedelta):
+        end_date = fecha_actual
+        start_date = fecha_actual - periodo
+    elif isinstance(periodo, tuple) and len(periodo) == 2:
+        start_date, end_date = periodo
+    else:
+        raise ValueError("El parámetro 'periodo' debe ser un timedelta o una tupla de fechas (start_date, end_date).")
+
     mydb = conectar_mysql()
     if mydb:
         cursor = mydb.cursor()
@@ -2151,21 +2092,24 @@ def calcular_consumo_periodo(periodo):
             JOIN departamentos d ON s.DepartamentoID = d.DepartamentoID
             WHERE s.FechaSalida BETWEEN %s AND %s
         """
-        val = (fecha_inicio, fecha_actual)
+        val = (start_date, end_date)
         try:
             cursor.execute(query, val)
             salidas_periodo = cursor.fetchall()
             for nombre_departamento, codigo_producto, cantidad, fecha_salida, unidad_medida, nombre_producto in salidas_periodo:
-                
                 if nombre_departamento not in consumo_departamentos:
                     consumo_departamentos[nombre_departamento] = {}
                 if codigo_producto not in consumo_departamentos[nombre_departamento]:
-                    consumo_departamentos[nombre_departamento][codigo_producto] = 0
+                    consumo_departamentos[nombre_departamento][codigo_producto] = {
+                        'cantidad': 0,
+                        'nombre_producto': nombre_producto,
+                        'unidad_medida': unidad_medida
+                    }
                 try:
-                    consumo_departamentos[nombre_departamento][codigo_producto] += int(cantidad)
+                    consumo_departamentos[nombre_departamento][codigo_producto]['cantidad'] += int(cantidad)
                     total_consumo += int(cantidad)
                 except ValueError:
-                    print(f"Cantidad inválida en la salida para el producto con código {codigo_producto} en el departamento {nombre_departamento}")
+                    print(f"Cantidad inválida en la salida para el producto con código {codigo_producto} en el departamento {nombre_departamento}. Cantidad: '{cantidad}'")
         except mysql.connector.Error as err:
             messagebox.showerror("Error", f"Error al calcular el consumo por período: {err}")
         finally:
@@ -2173,9 +2117,217 @@ def calcular_consumo_periodo(periodo):
             mydb.close()
     return consumo_departamentos, total_consumo
 
+def calcular_consumo_departamento():
+    """Calcula el consumo semanal y mensual por departamento y en general desde la base de datos."""
+    consumo_semanal_dummy = {}
+    consumo_mensual_dummy = {}
+    mostrar_consumo_periodos(consumo_semanal_dummy, consumo_mensual_dummy)
+
+def mostrar_consumo_periodos(consumo_semanal, consumo_mensual):
+    """
+    Muestra el consumo desglosado por semanas y mensual para el mes seleccionado,
+    con filtro por mes y optimizaciones para el orden.
+    """
+    global ventana_consumo, tabla_consumo_global_ref 
+
+    if ventana_consumo is not None and ventana_consumo.winfo_exists():
+        ventana_consumo.lift() 
+        return
+
+    ventana_consumo = tk.Toplevel(ventana)
+    ventana_consumo.title("Consumo por Período")
+    ventana_consumo.configure(bg="#A9A9A9")
+    ventana_consumo.geometry("1400x650") 
+
+    style = ttk.Style(ventana_consumo)
+    style.theme_use('clam')
+    style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
+    style.configure("Grid.Treeview", foreground="#000000", background="#ffffff", font=("Segoe UI", 10))
+    style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
+    style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
+    style.configure("Total.Treeview", font=("Segoe UI", 10, "bold"), background='#e0e0e0', foreground='#000000')
+
+   
+    frame_controles = tk.Frame(ventana_consumo, bg="#A9A9A9")
+    frame_controles.pack(pady=10, padx=10, fill=tk.X)
+
+    ttk.Label(frame_controles, text="Filtrar por Mes:", style="CustomLabel.TLabel").pack(side=tk.LEFT, padx=5)
+
+    meses_anios = obtener_meses_anios_disponibles_db()
+    mes_seleccionado_cb = ttk.Combobox(frame_controles, values=meses_anios, state="readonly", width=12)
+    mes_seleccionado_cb.pack(side=tk.LEFT, padx=5)
+    if meses_anios:
+        mes_seleccionado_cb.set(meses_anios[0])
+    else:
+        mes_seleccionado_cb.set("No hay datos")
+        mes_seleccionado_cb.config(state="disabled")
+
+   
+    boton_exportar_pdf = ttk.Button(frame_controles, text="Exportar a PDF", 
+                                    command=lambda: exportar_tabla_pdf(tabla_consumo_global_ref, f"Reporte de Consumo Mensual - {mes_seleccionado_cb.get()}"))
+    boton_exportar_pdf.pack(side=tk.RIGHT, padx=5)
+
 
     
+    tabla_consumo = ttk.Treeview(ventana_consumo, columns=(
+        "Departamento", "Código", "Producto",
+        "Semana 1", "Semana 2", "Semana 3", "Semana 4",
+        "Mensual", "Unidad Medida", "Porcentaje"
+    ), show="headings", style="Grid.Treeview")
+    tabla_consumo.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+    tabla_consumo_global_ref = tabla_consumo 
 
+    tabla_consumo.heading("Departamento", text="Departamento", anchor=tk.W)
+    tabla_consumo.heading("Código", text="Código", anchor=tk.W)
+    tabla_consumo.heading("Producto", text="Producto", anchor=tk.W)
+    tabla_consumo.heading("Semana 1", text="Semana 1", anchor=tk.W)
+    tabla_consumo.heading("Semana 2", text="Semana 2", anchor=tk.W)
+    tabla_consumo.heading("Semana 3", text="Semana 3", anchor=tk.W)
+    tabla_consumo.heading("Semana 4", text="Semana 4", anchor=tk.W)
+    tabla_consumo.heading("Mensual", text="Mensual", anchor=tk.W)
+    tabla_consumo.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
+    tabla_consumo.heading("Porcentaje", text="Porcentaje", anchor=tk.W)
+
+    tabla_consumo.column("Departamento", width=180)
+    tabla_consumo.column("Código", width=90)
+    tabla_consumo.column("Producto", width=180)
+    tabla_consumo.column("Semana 1", width=80)
+    tabla_consumo.column("Semana 2", width=80)
+    tabla_consumo.column("Semana 3", width=80)
+    tabla_consumo.column("Semana 4", width=80)
+    tabla_consumo.column("Mensual", width=80)
+    tabla_consumo.column("Unidad Medida", width=100)
+    tabla_consumo.column("Porcentaje", width=100)
+
+    
+    def poblar_tabla_segun_filtro(event=None):
+        selected_month_year = mes_seleccionado_cb.get()
+        if not selected_month_year or selected_month_year == "No hay datos":
+            for item in tabla_consumo.get_children():
+                tabla_consumo.delete(item)
+            return
+
+        month, year = map(int, selected_month_year.split('-'))
+
+       
+        first_day_of_month = datetime.date(year, month, 1)
+        if month == 12:
+            last_day_of_month = datetime.date(year + 1, 1, 1) - datetime.timedelta(days=1)
+        else:
+            last_day_of_month = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
+        
+        
+        for item in tabla_consumo.get_children():
+            tabla_consumo.delete(item)
+
+        
+        week_ranges = []
+       
+        week_ranges.append((first_day_of_month, min(first_day_of_month + datetime.timedelta(days=6), last_day_of_month)))
+        
+        
+        week_ranges.append((first_day_of_month + datetime.timedelta(days=7), min(first_day_of_month + datetime.timedelta(days=13), last_day_of_month)))
+        
+       
+        week_ranges.append((first_day_of_month + datetime.timedelta(days=14), min(first_day_of_month + datetime.timedelta(days=20), last_day_of_month)))
+        
+       
+        week_ranges.append((first_day_of_month + datetime.timedelta(days=21), last_day_of_month))
+
+       
+        consumo_semanal_data = [{}, {}, {}, {}]
+        total_semanal_data = [0, 0, 0, 0]
+
+        all_unique_products = {} 
+
+        
+        for i, (w_start, w_end) in enumerate(week_ranges):
+           
+            if w_start <= w_end:
+                current_week_consumo, current_week_total = calcular_consumo_periodo((w_start, w_end))
+                consumo_semanal_data[i] = current_week_consumo
+                total_semanal_data[i] = current_week_total
+                
+               
+                for dept, prods in current_week_consumo.items():
+                    for prod_code, details in prods.items():
+                        if (dept, prod_code) not in all_unique_products:
+                            all_unique_products[(dept, prod_code)] = {'nombre_producto': details['nombre_producto'], 'unidad_medida': details['unidad_medida']}
+
+
+       
+        consumo_mensual_total, total_mensual_general = calcular_consumo_periodo((first_day_of_month, last_day_of_month))
+
+       
+        for dept, prods in consumo_mensual_total.items():
+            for prod_code, details in prods.items():
+                if (dept, prod_code) not in all_unique_products:
+                    all_unique_products[(dept, prod_code)] = {'nombre_producto': details['nombre_producto'], 'unidad_medida': details['unidad_medida']}
+
+
+       
+        sorted_unique_keys = sorted(all_unique_products.keys())
+
+       
+        for dept, prod_code in sorted_unique_keys:
+            cantidad_semanas = [0, 0, 0, 0]
+            
+           
+            for i in range(4):
+                cantidad_semanas[i] = consumo_semanal_data[i].get(dept, {}).get(prod_code, {}).get('cantidad', 0)
+
+           
+            cantidad_mensual = consumo_mensual_total.get(dept, {}).get(prod_code, {}).get('cantidad', 0)
+
+           
+            product_details = all_unique_products[(dept, prod_code)]
+            nombre_producto = product_details['nombre_producto']
+            unidad_medida = product_details['unidad_medida']
+
+            
+            if any(q > 0 for q in cantidad_semanas) or cantidad_mensual > 0:
+                porcentaje = (cantidad_mensual / total_mensual_general) * 100 if total_mensual_general > 0 else 0
+                
+                values = (
+                    dept,
+                    prod_code,
+                    nombre_producto,
+                    cantidad_semanas[0],
+                    cantidad_semanas[1], 
+                    cantidad_semanas[2], 
+                    cantidad_semanas[3], 
+                    cantidad_mensual,
+                    unidad_medida,
+                    f"{porcentaje:.2f}%"
+                )
+                tabla_consumo.insert("", tk.END, values=values)
+        
+       
+        display_total_semanal = []
+        for i in range(4):
+            display_total_semanal.append(total_semanal_data[i] if total_semanal_data[i] > 0 else "")
+
+        display_total_mensual = total_mensual_general if total_mensual_general > 0 else ""
+
+       
+        if total_mensual_general > 0 or any(t > 0 for t in total_semanal_data):
+            total_row_values = ["", "", "TOTAL GENERAL"]
+            total_row_values.extend(display_total_semanal) 
+            total_row_values.append(display_total_mensual) 
+            total_row_values.extend(["", "100.00%"]) 
+
+            tabla_consumo.insert("", tk.END, values=total_row_values, tags=('total_row',))
+            tabla_consumo.tag_configure('total_row', font=('Segoe UI', 10, 'bold'), background='#d9f0f0', foreground='#000000')
+
+
+    
+    mes_seleccionado_cb.bind("<<ComboboxSelected>>", poblar_tabla_segun_filtro)
+
+    
+    if meses_anios:
+        poblar_tabla_segun_filtro() 
+    else:
+        messagebox.showinfo("Información", "No se encontraron datos de salidas en la base de datos para mostrar.")
 
 
 
@@ -3794,6 +3946,7 @@ def ventana_reportes():
     ventana_reporte = tk.Toplevel()
     ventana_reporte.title("Generar Reportes")
     ventana_reporte.configure(bg="#A9A9A9")
+    ventana_reporte.geometry("900x650") 
 
     style = ttk.Style(ventana_reporte)
     style.theme_use('clam')
@@ -3809,19 +3962,19 @@ def ventana_reportes():
 
     main_frame = ttk.Frame(ventana_reporte, style="TFrame")
     main_frame.pack(padx=20, pady=20, fill="both", expand=True)
-    main_frame.grid_columnconfigure(0, weight=1)
+    main_frame.grid_columnconfigure(0, weight=1) 
+    main_frame.grid_rowconfigure(1, weight=1) 
 
     frame_filtros = ttk.Frame(main_frame, style="TFrame")
     frame_filtros.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
 
-    frame_tabla = ttk.Frame(main_frame, style="TFrame")
-    frame_tabla.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
-    frame_tabla.grid_rowconfigure(0, weight=1)
-    frame_tabla.grid_columnconfigure(0, weight=1)
+    for i in range(6):
+        frame_filtros.grid_columnconfigure(i, weight=1)
+
     
     label_categoria = ttk.Label(frame_filtros, text="Filtrar por Categoría:", style="CustomLabel.TLabel")
     label_categoria.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-
+    
     def obtener_categorias_db():
         mydb = conectar_mysql()
         if mydb:
@@ -3850,6 +4003,9 @@ def ventana_reportes():
 
     def seleccionar_fecha_inicio_cat():
         top = tk.Toplevel(ventana_reporte)
+        top.title("Seleccionar Fecha")
+        top.transient(ventana_reporte) 
+        top.grab_set() 
         top.configure(bg="#A9A9A9")
         cal = Calendar(top, selectmode='day', date_pattern='yyyy-mm-dd', background="#ffffff", foreground="#000000", bordercolor="#d9d9d9", selectbackground="#bddfff", selectforeground="#000000")
         cal.pack(padx=10, pady=10)
@@ -3857,11 +4013,16 @@ def ventana_reportes():
             fecha_inicio_cat.set(cal.get_date())
             label_fecha_inicio_seleccionada_cat.config(text="Inicio: " + fecha_inicio_cat.get())
             top.destroy()
+            ventana_reporte.grab_release() 
         boton_seleccionar = ttk.Button(top, text="Seleccionar", command=grabar_fecha)
         boton_seleccionar.pack(pady=5)
+        ventana_reporte.wait_window(top) 
 
     def seleccionar_fecha_fin_cat():
         top = tk.Toplevel(ventana_reporte)
+        top.title("Seleccionar Fecha")
+        top.transient(ventana_reporte)
+        top.grab_set()
         top.configure(bg="#A9A9A9")
         cal = Calendar(top, selectmode='day', date_pattern='yyyy-mm-dd', background="#ffffff", foreground="#000000", bordercolor="#d9d9d9", selectbackground="#bddfff", selectforeground="#000000")
         cal.pack(padx=10, pady=10)
@@ -3869,19 +4030,22 @@ def ventana_reportes():
             fecha_fin_cat.set(cal.get_date())
             label_fecha_fin_seleccionada_cat.config(text="Fin: " + fecha_fin_cat.get())
             top.destroy()
+            ventana_reporte.grab_release()
         boton_seleccionar = ttk.Button(top, text="Seleccionar", command=grabar_fecha)
         boton_seleccionar.pack(pady=5)
+        ventana_reporte.wait_window(top)
 
-    boton_fecha_inicio_cat = ttk.Button(frame_filtros, text="Inicio", command=seleccionar_fecha_inicio_cat)
+    boton_fecha_inicio_cat = ttk.Button(frame_filtros, text="Inicio", command=seleccionar_fecha_inicio_cat, style="Small.TButton")
     boton_fecha_inicio_cat.grid(row=0, column=2, padx=5, pady=5)
     label_fecha_inicio_seleccionada_cat = ttk.Label(frame_filtros, text="Inicio: --", style="CustomLabel.TLabel")
     label_fecha_inicio_seleccionada_cat.grid(row=0, column=3, padx=5, pady=5, sticky="w")
 
-    boton_fecha_fin_cat = ttk.Button(frame_filtros, text="Fin", command=seleccionar_fecha_fin_cat)
+    boton_fecha_fin_cat = ttk.Button(frame_filtros, text="Fin", command=seleccionar_fecha_fin_cat, style="Small.TButton")
     boton_fecha_fin_cat.grid(row=0, column=4, padx=5, pady=5)
     label_fecha_fin_seleccionada_cat = ttk.Label(frame_filtros, text="Fin: --", style="CustomLabel.TLabel")
     label_fecha_fin_seleccionada_cat.grid(row=0, column=5, padx=5, pady=5, sticky="w")
 
+    
     def obtener_departamentos_db():
         mydb = conectar_mysql()
         if mydb:
@@ -3912,6 +4076,9 @@ def ventana_reportes():
 
     def seleccionar_fecha_inicio_dep():
         top = tk.Toplevel(ventana_reporte)
+        top.title("Seleccionar Fecha")
+        top.transient(ventana_reporte)
+        top.grab_set()
         top.configure(bg="#A9A9A9")
         cal = Calendar(top, selectmode='day', date_pattern='yyyy-mm-dd', background="#ffffff", foreground="#000000", bordercolor="#d9d9d9", selectbackground="#bddfff", selectforeground="#000000")
         cal.pack(padx=10, pady=10)
@@ -3919,11 +4086,16 @@ def ventana_reportes():
             fecha_inicio_dep.set(cal.get_date())
             label_fecha_inicio_seleccionada_dep.config(text="Inicio: " + fecha_inicio_dep.get())
             top.destroy()
+            ventana_reporte.grab_release()
         boton_seleccionar = ttk.Button(top, text="Seleccionar", command=grabar_fecha)
         boton_seleccionar.pack(pady=5)
+        ventana_reporte.wait_window(top)
 
     def seleccionar_fecha_fin_dep():
         top = tk.Toplevel(ventana_reporte)
+        top.title("Seleccionar Fecha")
+        top.transient(ventana_reporte)
+        top.grab_set()
         top.configure(bg="#A9A9A9")
         cal = Calendar(top, selectmode='day', date_pattern='yyyy-mm-dd', background="#ffffff", foreground="#000000", bordercolor="#d9d9d9", selectbackground="#bddfff", selectforeground="#000000")
         cal.pack(padx=10, pady=10)
@@ -3931,19 +4103,22 @@ def ventana_reportes():
             fecha_fin_dep.set(cal.get_date())
             label_fecha_fin_seleccionada_dep.config(text="Fin: " + fecha_fin_dep.get())
             top.destroy()
+            ventana_reporte.grab_release()
         boton_seleccionar = ttk.Button(top, text="Seleccionar", command=grabar_fecha)
         boton_seleccionar.pack(pady=5)
+        ventana_reporte.wait_window(top)
 
-    boton_fecha_inicio_dep = ttk.Button(frame_filtros, text="Inicio", command=seleccionar_fecha_inicio_dep)
+    boton_fecha_inicio_dep = ttk.Button(frame_filtros, text="Inicio", command=seleccionar_fecha_inicio_dep, style="Small.TButton")
     boton_fecha_inicio_dep.grid(row=1, column=2, padx=5, pady=5)
     label_fecha_inicio_seleccionada_dep = ttk.Label(frame_filtros, text="Inicio: --", style="CustomLabel.TLabel")
     label_fecha_inicio_seleccionada_dep.grid(row=1, column=3, padx=5, pady=5, sticky="w")
 
-    boton_fecha_fin_dep = ttk.Button(frame_filtros, text="Fin", command=seleccionar_fecha_fin_dep)
+    boton_fecha_fin_dep = ttk.Button(frame_filtros, text="Fin", command=seleccionar_fecha_fin_dep, style="Small.TButton")
     boton_fecha_fin_dep.grid(row=1, column=4, padx=5, pady=5)
     label_fecha_fin_seleccionada_dep = ttk.Label(frame_filtros, text="Fin: --", style="CustomLabel.TLabel")
     label_fecha_fin_seleccionada_dep.grid(row=1, column=5, padx=5, pady=5, sticky="w")
 
+   
     label_stock = ttk.Label(frame_filtros, text="Filtrar por Stock:", style="CustomLabel.TLabel")
     label_stock.grid(row=2, column=0, padx=5, pady=5, sticky="w")
     opciones_stock = ["Todos", "Bajo Stock (<= 2)", "Stock Medio (3-10)", "Stock Alto (>= 11)"]
@@ -3951,12 +4126,36 @@ def ventana_reportes():
     stock_seleccionado.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
     stock_seleccionado.set("")
 
+    
+    label_requisicion = ttk.Label(frame_filtros, text="Número de Requisición:", style="CustomLabel.TLabel")
+    label_requisicion.grid(row=3, column=0, padx=5, pady=5, sticky="w")
+    entry_numero_requisicion = ttk.Entry(frame_filtros, style="CustomEntry.TEntry", width=20)
+    entry_numero_requisicion.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
+
+    
+    frame_tabla = ttk.Frame(main_frame, style="TFrame")
+    frame_tabla.grid(row=1, column=0, padx=10, pady=10, sticky="nsew") 
+    frame_tabla.grid_rowconfigure(0, weight=1) 
+    frame_tabla.grid_columnconfigure(0, weight=1) 
+    
     global tabla_reporte
     tabla_reporte = ttk.Treeview(frame_tabla, style="Grid.Treeview")
-    tabla_reporte.pack(fill="both", expand=True)
+    tabla_reporte.grid(row=0, column=0, sticky="nsew") 
+
+    
+    scrollbar_y = ttk.Scrollbar(frame_tabla, orient="vertical", command=tabla_reporte.yview)
+    tabla_reporte.configure(yscrollcommand=scrollbar_y.set)
+    scrollbar_y.grid(row=0, column=1, sticky="ns") 
+    
+    scrollbar_x = ttk.Scrollbar(frame_tabla, orient="horizontal", command=tabla_reporte.xview)
+    tabla_reporte.configure(xscrollcommand=scrollbar_x.set)
+    scrollbar_x.grid(row=1, column=0, sticky="ew") 
+
 
     def limpiar_tabla_reporte():
         tabla_reporte.delete(*tabla_reporte.get_children())
+        tabla_reporte["columns"] = () 
+        tabla_reporte.heading("#0", text="") 
         categoria_seleccionada.set("")
         departamento_seleccionado.set("")
         stock_seleccionado.set("")
@@ -3968,12 +4167,12 @@ def ventana_reportes():
         fecha_fin_dep.set("")
         label_fecha_inicio_seleccionada_dep.config(text="Inicio: --")
         label_fecha_fin_seleccionada_dep.config(text="Fin: --")
+        entry_numero_requisicion.delete(0, tk.END) 
         ventana_reporte.current_report_title = "Reporte General"
 
     boton_limpiar = ttk.Button(frame_tabla, text="Limpiar", command=limpiar_tabla_reporte, style="Small.TButton")
-    boton_limpiar.pack(side="bottom", anchor="se", padx=10, pady=10)
+    boton_limpiar.grid(row=2, column=0, columnspan=2, pady=5, sticky="se") 
 
-   
     ventana_reporte.current_report_title = "Reporte General"
 
     def generar_reporte_filtrado():
@@ -3981,9 +4180,10 @@ def ventana_reportes():
         tabla_reporte["columns"] = ()
         tabla_reporte.heading("#0", text="")
 
-        categoria = categoria_seleccionada.get()
-        departamento = departamento_seleccionado.get()
-        stock = stock_seleccionado.get()
+        categoria = categoria_seleccionada.get().strip()
+        departamento = departamento_seleccionado.get().strip()
+        stock = stock_seleccionado.get().strip()
+        numero_requisicion = entry_numero_requisicion.get().strip() 
 
         fecha_inicio_cat_str = fecha_inicio_cat.get()
         fecha_fin_cat_str = fecha_fin_cat.get()
@@ -3991,57 +4191,61 @@ def ventana_reportes():
         fecha_fin_dep_str = fecha_fin_dep.get()
 
         print("\n--- INICIO DE GENERAR_REPORTE_FILTRADO ---")
-        print(f"Valores RAW: Cat='{categoria}', Dep='{departamento}', Stock='{stock}', FechaICat='{fecha_inicio_cat_str}', FechaFCat='{fecha_fin_cat_str}', FechaIDep='{fecha_inicio_dep_str}', FechaFDep='{fecha_fin_dep_str}'")
+        print(f"Valores RAW: Cat='{categoria}', Dep='{departamento}', Stock='{stock}', Req='{numero_requisicion}', FechaICat='{fecha_inicio_cat_str}', FechaFCat='{fecha_fin_cat_str}', FechaIDep='{fecha_inicio_dep_str}', FechaFDep='{fecha_fin_dep_str}'")
 
-        es_categoria_especifica = (categoria != "Todas" and categoria != "")
-        es_departamento_especifico = (departamento != "Todos" and departamento != "")
-        es_stock_especifico = (stock != "Todos" and stock != "")
+       
+        hay_seleccion_categoria = (categoria != "")
+        hay_fechas_categoria = (fecha_inicio_cat_str != "" or fecha_fin_cat_str != "")
 
-        hay_filtro_categoria_o_fechas = (categoria != "" or (fecha_inicio_cat_str and fecha_fin_cat_str))
-        hay_filtro_departamento_o_fechas = (departamento != "" or (fecha_inicio_dep_str and fecha_fin_dep_str))
-        hay_filtro_stock = (stock != "") 
-
-        print(f"Banderas Específicas: CatEsp={es_categoria_especifica}, DepEsp={es_departamento_especifico}, StockEsp={es_stock_especifico}")
-        print(f"Banderas Generales: HayCatOFechas={hay_filtro_categoria_o_fechas}, HayDepOFechas={hay_filtro_departamento_o_fechas}, HayStock={hay_filtro_stock}")
-
-        if es_categoria_especifica and es_departamento_especifico:
-            print("DEBUG: Detectado: Filtro combinado Categoria ESPECIFICA y Departamento ESPECIFICO.")
-            generar_reporte_categoria_departamento(categoria, departamento, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte)
+        hay_seleccion_departamento = (departamento != "")
+        hay_fechas_departamento = (fecha_inicio_dep_str != "" or fecha_fin_dep_str != "")
         
-        elif hay_filtro_categoria_o_fechas:
-            print("DEBUG: Detectado: Filtro de Categoria activo (específico, 'Todas', o con fechas).")
-           
+        hay_seleccion_stock = (stock != "")
+        hay_numero_requisicion = (numero_requisicion != "")
+
+        print(f"Banderas de Selección: HayCat={hay_seleccion_categoria}, FechasCat={hay_fechas_categoria}, HayDep={hay_seleccion_departamento}, FechasDep={hay_fechas_departamento}, HayStock={hay_seleccion_stock}, HayReq={hay_numero_requisicion}")
+
+        
+        if hay_numero_requisicion:
+            print("DEBUG: Detectado: Filtro por Número de Requisición activo.")
+            
+            generar_reporte_por_requisicion(numero_requisicion, departamento, tabla_reporte, ventana_reporte)
+            
+        elif hay_seleccion_categoria or hay_fechas_categoria:
+            print("DEBUG: Detectado: Filtro de Categoría activo (incluyendo 'Todas') o fechas de categoría.")
+            
             generar_reporte_consumo_lapso_filtrado(categoria, fecha_inicio_cat_str, fecha_fin_cat_str, departamento, stock, tabla_reporte, ventana_reporte)
             
-        elif hay_filtro_departamento_o_fechas:
-            print("DEBUG: Detectado: Filtro de Departamento activo (específico, 'Todos', o con fechas).")
-           
+        elif hay_seleccion_departamento or hay_fechas_departamento:
+            print("DEBUG: Detectado: Filtro de Departamento activo (incluyendo 'Todos') o fechas de departamento.")
+            
             generar_reporte_departamento(departamento, categoria, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte, stock)
             
-        elif hay_filtro_stock:
-            print("DEBUG: Detectado: Filtro de Stock activo (específico o 'Todos').")
-           
+        elif hay_seleccion_stock:
+            print("DEBUG: Detectado: Filtro de Stock activo (incluyendo 'Todos').")
+            
             generar_reporte_de_stock(stock, categoria, departamento, fecha_inicio_dep_str, fecha_fin_dep_str, tabla_reporte, ventana_reporte)
             
         else:
-            print("DEBUG: Ningún filtro activo. Mostrando mensaje de información.")
+            print("DEBUG: Ningún filtro principal activo. Mostrando mensaje de información.")
             messagebox.showinfo("Selección de Filtros",
-                                 "Por favor, selecciona al menos un criterio en Categoría, Departamento o Stock para generar un reporte filtrado, o utiliza el botón 'Generar Inventario Completo'.",
+                                 "Por favor, selecciona al menos un criterio en Categoría, Departamento, Stock o ingresa un Número de Requisición para generar un reporte filtrado, o utiliza el botón 'Generar Inventario Completo'.",
                                  parent=ventana_reporte)
             ventana_reporte.current_report_title = "Reporte General" 
 
         print("--- FIN DE GENERAR_REPORTE_FILTRADO ---")
     
+    
     boton_generar_filtrado = ttk.Button(frame_filtros, text="Generar Reporte Filtrado", command=generar_reporte_filtrado)
-    boton_generar_filtrado.grid(row=3, column=0, columnspan=3, pady=10)
+    boton_generar_filtrado.grid(row=4, column=0, columnspan=2, pady=10, sticky="ew", padx=5) 
 
     boton_generar_completo = ttk.Button(frame_filtros, text="Generar Inventario Completo", command=lambda: generar_reporte_inventario_completo(tabla_reporte, ventana_reporte))
-    boton_generar_completo.grid(row=3, column=3, columnspan=3, pady=10)
+    boton_generar_completo.grid(row=4, column=2, columnspan=2, pady=10, sticky="ew", padx=5)
 
     
+
     boton_pdf = ttk.Button(main_frame, text="Exportar a PDF", command=lambda: exportar_tabla_pdf(tabla_reporte, titulo_reporte=getattr(ventana_reporte, 'current_report_title', 'Reporte General')))
-    boton_pdf.grid(row=2, column=0, pady=10)
-    boton_pdf.anchor(tk.CENTER)
+    boton_pdf.grid(row=2, column=0, pady=10, sticky="ew")
 
     for i in range(6):
         frame_filtros.grid_columnconfigure(i, weight=1)
@@ -4211,7 +4415,7 @@ def generar_reporte_consumo_lapso_filtrado(categoria_filtro, fecha_inicio_str, f
             messagebox.showinfo("Sin Resultados", "No se encontraron datos de consumo para los filtros de categoría y/o fecha seleccionados.", parent=ventana)
             tabla["columns"] = ()
             tabla.heading("#0", text="")
-            ventana.current_report_title = "Reporte de Consumo (Sin Resultados)" # Título si no hay resultados
+            ventana.current_report_title = "Reporte de Consumo (Sin Resultados)" 
             return
 
         total_consumo = 0
@@ -4224,7 +4428,7 @@ def generar_reporte_consumo_lapso_filtrado(categoria_filtro, fecha_inicio_str, f
 
     except mysql.connector.Error as err:
         messagebox.showerror("Error", f"Error al generar el reporte de categoría/consumo: {err}", parent=ventana)
-        ventana.current_report_title = "Reporte de Consumo (Error)" # Título en caso de error de consulta
+        ventana.current_report_title = "Reporte de Consumo (Error)" 
     finally:
         if cursor:
             cursor.close()
@@ -4238,7 +4442,6 @@ def generar_reporte_departamento(departamento_filtro, categoria_filtro, fecha_in
     """
     tabla.delete(*tabla.get_children()) 
 
-   
     report_title_parts = ["REPORTE DE DEPARTAMENTO"]
     if departamento_filtro and departamento_filtro != "Todos":
         report_title_parts.append(f"Departamento: '{departamento_filtro}'")
@@ -4288,14 +4491,14 @@ def generar_reporte_departamento(departamento_filtro, categoria_filtro, fecha_in
             cat.NombreCategoria,
             p.Nombre,
             s.Cantidad,
-            p.UnidadMedida, -- Añadido
+            p.UnidadMedida,
             s.FechaSalida, -- Se usa para construir el lapso_texto si es necesario
-            s.NumeroRequisicion -- Añadido
+            s.NumeroRequisicion 
         FROM salidas s
         JOIN productos p ON s.ProductoID = p.ProductoID
         JOIN departamentos d ON s.DepartamentoID = d.DepartamentoID
         JOIN categorias cat ON p.CategoriaID = cat.CategoriaID
-        WHERE 1=1 -- Siempre iniciar con 1=1 para condiciones dinámicas
+        WHERE 1=1 
     """
     params = []
     
@@ -4319,7 +4522,8 @@ def generar_reporte_departamento(departamento_filtro, categoria_filtro, fecha_in
         elif stock_filtro_texto == "Stock Alto (>= 11)":
             query += " AND p.Stock >= 11"
     
-    query += " ORDER BY d.NombreDepartamento, s.FechaSalida DESC" 
+   
+    query += " ORDER BY s.NumeroRequisicion ASC, d.NombreDepartamento ASC, s.FechaSalida DESC" 
 
     try:
         cursor.execute(query, params)
@@ -4335,7 +4539,9 @@ def generar_reporte_departamento(departamento_filtro, categoria_filtro, fecha_in
         total_consumo = 0
         for departamento_nombre, categoria_nombre, producto, cantidad, unidad_medida, fecha_salida, numero_requisicion in reporte_data:
            
-            tabla.insert("", tk.END, values=(departamento_nombre, categoria_nombre, producto, cantidad, unidad_medida, lapso_texto, numero_requisicion))
+            display_lapso = f"{fecha_salida.strftime('%Y-%m-%d')}" if not (fecha_inicio_str and fecha_fin_str) else lapso_texto
+
+            tabla.insert("", tk.END, values=(departamento_nombre, categoria_nombre, producto, cantidad, unidad_medida, display_lapso, numero_requisicion))
             total_consumo += cantidad
         
         tabla.insert("", tk.END, values=("", "", "TOTAL CONSUMIDO:", total_consumo, "", "", ""), tags=('total_row',))
@@ -4438,7 +4644,91 @@ def generar_reporte_de_stock(stock_filtro_texto, categoria_filtro, departamento_
             cursor.close()
         if mydb and mydb.is_connected():
             mydb.close()
+def generar_reporte_por_requisicion(numero_requisicion_filtro, departamento_filtro, tabla, ventana):
+    """
+    Genera un reporte de salidas de productos filtrado por número de requisición y opcionalmente por departamento.
+    Muestra: Número de Requisición, Departamento, Producto, Cantidad, Unidad Medida, Fecha de Salida.
+    """
+    tabla.delete(*tabla.get_children()) 
 
+    report_title_parts = ["REPORTE POR REQUISICIÓN"]
+    if numero_requisicion_filtro:
+        report_title_parts.append(f"No. Requisición: '{numero_requisicion_filtro}'")
+    if departamento_filtro and departamento_filtro != "Todos":
+        report_title_parts.append(f"Departamento: '{departamento_filtro}'")
+    else:
+        report_title_parts.append("Todos los Departamentos")
+
+    ventana.current_report_title = " | ".join(report_title_parts)
+    
+    columnas = ("Número Requisición", "Departamento", "Producto", "Cantidad", "Unidad Medida", "Fecha Salida")
+    tabla["columns"] = columnas
+    tabla.heading("#0", text="") 
+
+    for col in columnas:
+        tabla.heading(col, text=col, anchor=tk.W)
+        if col == "Cantidad": tabla.column(col, width=90, anchor=tk.CENTER)
+        elif col == "Unidad Medida": tabla.column(col, width=100, anchor=tk.W)
+        elif col == "Fecha Salida": tabla.column(col, width=120, anchor=tk.W)
+        elif col == "Número Requisición": tabla.column(col, width=130, anchor=tk.W)
+        else: tabla.column(col, width=150, anchor=tk.W)
+    tabla.column("#0", width=0, stretch=tk.NO)
+
+    mydb = conectar_mysql() 
+    if not mydb: 
+        ventana.current_report_title = "Reporte por Requisición (Error de Conexión)" 
+        return
+
+    cursor = mydb.cursor()
+    query = """
+        SELECT
+            s.NumeroRequisicion,
+            d.NombreDepartamento,
+            p.Nombre AS NombreProducto,
+            s.Cantidad,
+            p.UnidadMedida,
+            s.FechaSalida
+        FROM
+            salidas s
+        JOIN
+            productos p ON s.ProductoID = p.ProductoID
+        JOIN
+            departamentos d ON s.DepartamentoID = d.DepartamentoID
+        WHERE 1=1
+    """
+    params = []
+
+    if numero_requisicion_filtro:
+        query += " AND s.NumeroRequisicion = %s"
+        params.append(numero_requisicion_filtro)
+
+    if departamento_filtro and departamento_filtro != "Todos":
+        query += " AND d.NombreDepartamento = %s"
+        params.append(departamento_filtro)
+    
+    query += " ORDER BY s.FechaSalida DESC, s.NumeroRequisicion, p.Nombre;"
+
+    try:
+        cursor.execute(query, params)
+        reporte_data = cursor.fetchall()
+
+        if not reporte_data:
+            messagebox.showinfo("Sin Resultados", f"No se encontraron salidas para la requisición '{numero_requisicion_filtro}' y/o departamento '{departamento_filtro}'.", parent=ventana)
+            tabla["columns"] = ()
+            tabla.heading("#0", text="")
+            ventana.current_report_title = "Reporte por Requisición (Sin Resultados)"
+            return
+
+        for row in reporte_data:
+            formatted_row = tuple("" if item is None else str(item) for item in row)
+            tabla.insert("", tk.END, values=formatted_row)
+
+    except mysql.connector.Error as err:
+        messagebox.showerror("Error", f"Error al generar el reporte por requisición: {err}", parent=ventana)
+        ventana.current_report_title = "Reporte por Requisición (Error)"
+    finally:
+        if cursor: cursor.close()
+        if mydb and mydb.is_connected(): mydb.close()
 def generar_reporte_categoria_departamento(categoria_filtro, departamento_filtro, fecha_inicio_str, fecha_fin_str, tabla, ventana):
     """
     Genera un reporte de consumo de productos de una categoría específica por un departamento específico.
@@ -4551,6 +4841,7 @@ def generar_reporte_categoria_departamento(categoria_filtro, departamento_filtro
             cursor.close()
         if mydb and mydb.is_connected():
             mydb.close()
+
 
         
 class PDFConMembrete(FPDF):
