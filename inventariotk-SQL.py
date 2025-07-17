@@ -26,18 +26,18 @@ import uuid
 import mysql.connector
 
 #conector a la base de datos mysql
-#def conectar_mysql():
-    #try:
-        #mydb = mysql.connector.connect(
-            #host="127.0.0.1",       
-            #user="root",
-            #password="",     
-            #database="sistema inventario corpoandes" 
-        #)
-        #return mydb
-    #except mysql.connector.Error as err:
-        #messagebox.showerror(f"Error al conectar a MySQL: {err}")
-        #return None
+"""def conectar_mysql():
+    try:
+        mydb = mysql.connector.connect(
+            host="127.0.0.1",       
+            user="root",
+            password="",     
+            database="sistema inventario corpoandes" 
+        )
+        return mydb
+    except mysql.connector.Error as err:
+        messagebox.showerror(f"Error al conectar a MySQL: {err}")
+        return None"""
 
 def conectar_mysql():
     try:
@@ -560,13 +560,17 @@ def agregar_producto():
             return f"{prefijo}-{ultimo_numero + 1:03d}"
 
     def agregar():
+        # Eliminado 'global' y las inicializaciones 'if None' para usar las variables globales existentes
+        # tal como tu función original lo esperaba.
+
         producto_nombre = entry_producto.get().strip()
         categoria_nombre = categoria_var.get().strip()
         entrada_cantidad_str = entry_entrada.get().strip()
         unidad_medida = unidad_medida_var.get().strip()
-        fecha_entrada_str = entry_fecha_entrada.get().strip()
-
+        fecha_entrada_str = entry_fecha_entrada.get().strip() # Usando la variable del widget
         
+        sin_factura_val = check_sin_factura_var.get() # True/False desde el checkbox
+
         if not producto_nombre:
             messagebox.showwarning("Campos Incompletos", "Por favor, ingrese el nombre del producto.")
             return
@@ -583,7 +587,6 @@ def agregar_producto():
             messagebox.showwarning("Campos Incompletos", "Por favor, ingrese la fecha de entrada.")
             return
 
-        
         try:
             entrada_cantidad = float(entrada_cantidad_str)
             if entrada_cantidad <= 0:
@@ -593,14 +596,12 @@ def agregar_producto():
             messagebox.showwarning("Cantidad Inválida", "La cantidad de entrada debe ser un número entero válido.")
             return
 
-        
         try:
             fecha_entrada = datetime.datetime.strptime(fecha_entrada_str, "%Y-%m-%d")
         except ValueError:
             messagebox.showwarning("Fecha Inválida", "El formato de la fecha debe ser AAAA-MM-DD (ej. 2025-05-26).")
             return
 
-        
         codigo_producto = generar_codigo(categoria_nombre)
 
         mydb = conectar_mysql()
@@ -609,7 +610,6 @@ def agregar_producto():
 
         cursor = mydb.cursor()
 
-        
         query_categoria_id = "SELECT CategoriaID FROM categorias WHERE NombreCategoria = %s"
         categoria_id = None
         try:
@@ -626,7 +626,6 @@ def agregar_producto():
             mydb.close()
             return
 
-        
         query_verificar_producto = """
             SELECT COUNT(*)
             FROM productos
@@ -643,7 +642,7 @@ def agregar_producto():
                     "Por favor, elija un nombre, categoría o unidad de medida diferente o actualice el producto existente."
                 )
                 mydb.close()
-                return 
+                return
         except mysql.connector.Error as err:
             messagebox.showerror("Error de base de datos", f"Error al verificar producto existente: {err}")
             mydb.close()
@@ -652,32 +651,43 @@ def agregar_producto():
         destino_entrada_nombre = "Almacén principal"
 
         sql_producto = """
-            INSERT INTO productos (Codigo, Nombre, CategoriaID, Stock, UnidadMedida, FechaEntrada)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO productos (Codigo, Nombre, CategoriaID, Stock, UnidadMedida, FechaEntrada, sin_factura)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
-        val_producto = (codigo_producto, producto_nombre, categoria_id, entrada_cantidad, unidad_medida, fecha_entrada)
+        
+        val_producto = (
+            codigo_producto,
+            producto_nombre,
+            categoria_id,
+            entrada_cantidad,
+            unidad_medida,
+            fecha_entrada,
+            sin_factura_val 
+        )
         try:
             cursor.execute(sql_producto, val_producto)
             producto_id = cursor.lastrowid
 
+            # --- INICIO DE LA ÚNICA MODIFICACIÓN ---
             sql_entrada = """
-                INSERT INTO entradas (ProductoID, CodigoProducto, Cantidad, UnidadMedida, FechaEntrada, Destino)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO entradas (ProductoID, CodigoProducto, Cantidad, UnidadMedida, FechaEntrada, Destino, sin_factura)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
-            val_entrada = (producto_id, codigo_producto, entrada_cantidad, unidad_medida, fecha_entrada, destino_entrada_nombre) # Agrega unidad_medida aquí
+            val_entrada = (producto_id, codigo_producto, entrada_cantidad, unidad_medida, fecha_entrada, destino_entrada_nombre, sin_factura_val)
+            # --- FIN DE LA ÚNICA MODIFICACIÓN ---
+            
             cursor.execute(sql_entrada, val_entrada)
 
             mydb.commit()
             messagebox.showinfo("Producto Agregado", f"Producto '{producto_nombre}' agregado al inventario con código: {codigo_producto}, Fecha de entrada: {fecha_entrada}, Destino: {destino_entrada_nombre}")
 
-           
             entry_producto.delete(0, tk.END)
             entry_entrada.delete(0, tk.END)
             entry_fecha_entrada.delete(0, tk.END)
             
             categoria_var.set("")
             unidad_medida_var.set("")
-
+            check_sin_factura_var.set(False) 
 
         except mysql.connector.Error as err:
             mydb.rollback()
@@ -710,7 +720,6 @@ def agregar_producto():
                 if mydb and mydb.is_connected():
                     mydb.close()
 
- 
     def agregar_unidad_predeterminada_a_db(nombre_unidad):
         """Agrega una unidad de medida a la DB si no existe."""
         mydb = conectar_mysql()
@@ -744,11 +753,9 @@ def agregar_producto():
                     if mydb:
                         cursor = mydb.cursor()
                         try:
-                            
                             sql_insertar_categoria = "INSERT INTO categorias (NombreCategoria) VALUES (%s)"
                             cursor.execute(sql_insertar_categoria, (nueva_cat,))
                             mydb.commit()
-
                             
                             categorias_list.insert(len(categorias_list) - 1, nueva_cat)
                             combo_categoria['values'] = categorias_list
@@ -789,6 +796,7 @@ def agregar_producto():
         ttk.Button(ventana_nueva_categoria, text="Guardar", command=guardar_nueva, style="CustomButton.TButton").pack(pady=10)
         ventana_nueva_categoria.wait_window() 
 
+
     def agregar_nueva_unidad():
         def guardar_nueva_unidad():
             nueva_unidad = nueva_unidad_entry.get().strip()
@@ -798,12 +806,10 @@ def agregar_producto():
                     if mydb:
                         cursor = mydb.cursor()
                         try:
-                            
                             sql_insertar_unidad = "INSERT INTO unidades_medida (NombreUnidad) VALUES (%s)"
                             cursor.execute(sql_insertar_unidad, (nueva_unidad,))
                             mydb.commit()
 
-                           
                             unidades_list.insert(len(unidades_list) - 1, nueva_unidad)
                             combo_unidad_medida['values'] = unidades_list
                             unidad_medida_var.set(nueva_unidad) 
@@ -813,7 +819,7 @@ def agregar_producto():
                             mydb.rollback()
                             if "Duplicate entry" in str(err): 
                                 messagebox.showerror("Error al guardar unidad", f"La unidad de medida '{nueva_unidad}' ya existe en la base de datos.")
-                               
+                                
                                 recargar_listas_categorias_y_unidades()
                                 unidad_medida_var.set(nueva_unidad)
                                 ventana_nueva_unidad.destroy()
@@ -889,7 +895,6 @@ def agregar_producto():
         categorias_list = cargar_categorias_desde_db()
         unidades_list = cargar_unidades_desde_db()
 
-        
         if "Añadir nueva" not in categorias_list:
             categorias_list.append("Añadir nueva")
         if "Añadir nueva" not in unidades_list:
@@ -898,7 +903,6 @@ def agregar_producto():
         combo_categoria['values'] = categorias_list
         combo_unidad_medida['values'] = unidades_list
 
-       
         if categoria_var.get() not in categorias_list:
             categoria_var.set(categorias_list[0] if categorias_list else "")
         if unidad_medida_var.get() not in unidades_list:
@@ -915,14 +919,12 @@ def agregar_producto():
             agregar_nueva_unidad()
             
 
-
     ventana_agregar = tk.Toplevel(ventana)
     ventana_agregar.title("Agregar Producto")
     ventana_agregar.configure(bg="#000080")
     ventana_agregar.grab_set() 
     ventana_agregar.transient(ventana) 
 
-  
     categorias_predeterminadas_inicial = ["COMIDA", "MATERIALES Y ARTICULOS DE OFICINA", "TONNER", "MATERIAL DE LIMPIEZA", "PLASTICO", "MATERIAL DE FERRETERIA", "OTROS"]
     for cat in categorias_predeterminadas_inicial:
         agregar_categoria_predeterminada_a_db(cat)
@@ -931,27 +933,21 @@ def agregar_producto():
     for uni in unidades_medida_predeterminadas_inicial:
         agregar_unidad_predeterminada_a_db(uni)
 
-    
     categorias_list = cargar_categorias_desde_db()
     unidades_list = cargar_unidades_desde_db()
 
-   
     if "Añadir nueva" not in categorias_list:
         categorias_list.append("Añadir nueva")
     if "Añadir nueva" not in unidades_list:
         unidades_list.append("Añadir nueva")
 
-
-    
     categoria_var = tk.StringVar()
     unidad_medida_var = tk.StringVar()
-
-    #categoria_var.set(categorias_list[0] if categorias_list else "")
-    #unidad_medida_var.set(unidades_list[0] if unidades_list else "")
+   
+    check_sin_factura_var = tk.BooleanVar(ventana_agregar)
 
 
     def abrir_calendario_local():
-       
         abrir_calendario(ventana_agregar, entry_fecha_entrada)
 
     style = ttk.Style(ventana_agregar)
@@ -991,10 +987,29 @@ def agregar_producto():
     entry_fecha_entrada.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
 
     ttk.Button(ventana_agregar, text="Calendario", command=abrir_calendario_local, style="CustomButton.TButton").grid(row=5, column=2, padx=10, pady=10)
-    ttk.Button(ventana_agregar, text="Agregar", command=agregar, style="CustomButton.TButton").grid(row=6, column=0, columnspan=3, pady=15, padx=10, sticky="ew")
+    
+    
+    style.configure("Colored.TCheckbutton",
+                background="#000080", # El color de fondo que deseas
+                foreground="#ffffff", # Color del texto (blanco para contraste)
+                font=("Segoe UI", 10, "bold")) # <-- ¡Aquí está la clave! Añade "bold"
+
+    check_sin_factura = ttk.Checkbutton(
+    ventana_agregar,
+    text="Producto sin factura",
+    variable=check_sin_factura_var,
+    style="Colored.TCheckbutton"# Aplica el estilo personalizado aquí
+    )
+
+    check_sin_factura.grid(row=6, column=0, columnspan=2, pady=5, sticky="w", padx=10)
+
+   
+    ttk.Button(ventana_agregar, text="Agregar", command=agregar, style="CustomButton.TButton").grid(row=7, column=0, columnspan=3, pady=15, padx=10, sticky="ew")
 
     ventana_agregar.grid_columnconfigure(1, weight=1)
-    ventana_agregar.wait_window() 
+    ventana_agregar.wait_window()
+
+    
 
 
 
@@ -1006,28 +1021,28 @@ def agregar_producto():
 def realizar_salida():
     """Realiza una salida en espera de productos del inventario, permitiendo búsqueda por nombre o código."""
 
-    def obtener_productos_con_codigo_y_unidad(): 
-        """Obtiene la lista de productos (Nombre (Código)) y su UnidadMedida desde la base de datos MySQL."""
+    def obtener_productos_con_codigo_y_unidad():
+        """Obtiene la lista de productos (Nombre (Código)), su UnidadMedida y sin_factura desde la base de datos MySQL."""
         productos_info = []
         mydb = conectar_mysql()
         if mydb:
             cursor = mydb.cursor()
-            
-            query = "SELECT Nombre, Codigo, ProductoID, UnidadMedida FROM productos"
+            # MODIFICACIÓN: Añadir p.sin_factura a la consulta de productos
+            query = "SELECT Nombre, Codigo, ProductoID, UnidadMedida, sin_factura FROM productos"
             try:
                 cursor.execute(query)
                 productos_mysql = cursor.fetchall()
-                for nombre, codigo, producto_id, unidad_medida in productos_mysql:
-                   
-                    productos_info.append((f"{nombre} ({codigo})", unidad_medida)) 
+                for nombre, codigo, producto_id, unidad_medida, sin_factura in productos_mysql:
+                    # Almacenamos también el estado sin_factura para uso posterior
+                    productos_info.append((f"{nombre} ({codigo})", unidad_medida, producto_id, sin_factura))
             except mysql.connector.Error as err:
                 messagebox.showerror("Error", f"Error al obtener productos: {err}")
             finally:
                 if mydb.is_connected():
                     cursor.close()
                     mydb.close()
-        
-        return sorted(productos_info, key=lambda x: x[0]) 
+
+        return sorted(productos_info, key=lambda x: x[0])
 
     def obtener_nombre_desde_seleccion(seleccion):
         """Extrae el nombre del producto de la string seleccionada en el Combobox."""
@@ -1040,9 +1055,10 @@ def realizar_salida():
         if " (" in seleccion and seleccion.endswith(")"):
             return seleccion.split(" (")[1][:-1]
         return None
-    
+
     def obtener_departamentos_para_combobox():
-        departamentos_map = {}
+        global departamentos_map_global  # Asegura que se use la variable global
+        departamentos_map_global = {}
         nombres_departamentos = []
         mydb = conectar_mysql()
         if mydb:
@@ -1050,7 +1066,7 @@ def realizar_salida():
             try:
                 cursor.execute("SELECT DepartamentoID, NombreDepartamento FROM departamentos ORDER BY NombreDepartamento")
                 for dep_id, dep_nombre in cursor.fetchall():
-                    departamentos_map[dep_nombre] = dep_id
+                    departamentos_map_global[dep_nombre] = dep_id
                     nombres_departamentos.append(dep_nombre)
             except mysql.connector.Error as err:
                 messagebox.showerror("Error", f"Error al cargar departamentos: {err}")
@@ -1058,14 +1074,14 @@ def realizar_salida():
                 if mydb.is_connected():
                     cursor.close()
                     mydb.close()
-        return nombres_departamentos, departamentos_map
+        return nombres_departamentos, departamentos_map_global
 
     def salida_espera():
-        
-        departamento_nombre_seleccionado = departamento_var.get() 
-        
-        seleccion_producto_display = combo_producto.get() 
-        
+
+        departamento_nombre_seleccionado = departamento_var.get()
+
+        seleccion_producto_display = combo_producto.get()
+
         try:
             cantidad = float(entry_cantidad.get())
             if cantidad <= 0:
@@ -1081,52 +1097,53 @@ def realizar_salida():
         if not codigo_producto:
             messagebox.showerror("Error", "Por favor, seleccione un producto válido de la lista.")
             return
-            
+
         mydb = conectar_mysql()
         if not mydb:
             messagebox.showerror("Error", "No se pudo conectar a la base de datos.")
             return
 
         cursor = mydb.cursor()
-        
+
         try:
-            
-            query_producto_info = "SELECT ProductoID, UnidadMedida FROM productos WHERE Codigo = %s"
+            # MODIFICACIÓN CLAVE: Obtener también el campo sin_factura del producto
+            query_producto_info = "SELECT ProductoID, UnidadMedida, sin_factura FROM productos WHERE Codigo = %s"
             cursor.execute(query_producto_info, (codigo_producto,))
             resultado_info = cursor.fetchone()
 
             if not resultado_info:
                 messagebox.showerror("Error", f"No se encontró el producto con código: {codigo_producto}")
                 return
-            
-            producto_id = resultado_info[0]
-            unidad_medida_producto = resultado_info[1] 
 
-            
+            producto_id = resultado_info[0]
+            unidad_medida_producto = resultado_info[1]
+            es_sin_factura = resultado_info[2] # ¡Obtenemos el valor de sin_factura!
+
             if not unidad_medida_producto:
-                 messagebox.showwarning("Advertencia", f"El producto '{producto_nombre}' no tiene una unidad de medida definida. Se agregará sin unidad de medida.")
-            
+                messagebox.showwarning("Advertencia", f"El producto '{producto_nombre}' no tiene una unidad de medida definida. Se agregará sin unidad de medida.")
+
             departamento_id = departamentos_map_global.get(departamento_nombre_seleccionado)
-            
+
             if departamento_id is None:
                 messagebox.showerror("Error", f"Departamento '{departamento_nombre_seleccionado}' no válido.")
                 return
 
-           
+            # MODIFICACIÓN: Añadir sin_factura a la inserción en salidas_espera
             sql_insert_salida = """
-                INSERT INTO salidas_espera (ProductoID, CodigoProducto, Cantidad, UnidadMedida, DepartamentoID, FechaSolicitud, Estado)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO salidas_espera (ProductoID, CodigoProducto, Cantidad, UnidadMedida, DepartamentoID, FechaSolicitud, Estado, sin_factura)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
-            fecha_actual = datetime.date.today() 
-           
-            val_salida = (producto_id, codigo_producto, cantidad, unidad_medida_producto, departamento_id, fecha_actual, "Pendiente")
-            
+            fecha_actual = datetime.date.today()
+
+            # ¡Añadimos es_sin_factura a los valores a insertar!
+            val_salida = (producto_id, codigo_producto, cantidad, unidad_medida_producto, departamento_id, fecha_actual, "Pendiente", es_sin_factura)
+
             cursor.execute(sql_insert_salida, val_salida)
             mydb.commit()
-            
+
             messagebox.showinfo("Salida en Espera", f"{cantidad} {unidad_medida_producto} de '{producto_nombre}' (código: {codigo_producto}) solicitadas para {departamento_nombre_seleccionado}. Agregado a la lista de espera.")
             entry_cantidad.delete(0, tk.END)
-            
+
         except mysql.connector.Error as err:
             mydb.rollback()
             messagebox.showerror("Error al agregar salida en espera", f"Error: {err}")
@@ -1138,12 +1155,11 @@ def realizar_salida():
                 cursor.close()
                 mydb.close()
 
-
+    # --- Configuración de la ventana de salida en espera ---
     ventana_salida_espera = tk.Toplevel(ventana)
     ventana_salida_espera.title("Salida en Espera")
     ventana_salida_espera.configure(bg="#000080")
 
-    
     style = ttk.Style(ventana_salida_espera)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#000080", font=("Segoe UI", 10, "bold"))
@@ -1152,55 +1168,41 @@ def realizar_salida():
     style.configure("CustomButton.TButton", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"), padding=8, relief="raised", anchor="center")
     style.map("CustomButton.TButton", background=[('active', '#c1c1c1')], foreground=[('active', '#000000')])
 
-    
     productos_con_codigo_y_unidad = obtener_productos_con_codigo_y_unidad()
-    
     productos_display_strings = [item[0] for item in productos_con_codigo_y_unidad]
 
-
     ttk.Label(ventana_salida_espera, text="Nombre del producto (Código):", style="CustomLabel.TLabel").grid(row=0, column=0, sticky="w", padx=10, pady=10)
-    
+
     combo_producto = ttk.Combobox(ventana_salida_espera, values=productos_display_strings, style="TCombobox")
     combo_producto.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
-    
     def filtrar_productos(event):
         valor_escrito = combo_producto.get().lower()
-        
         productos_filtrados_display = [
             pc_display
-            for pc_display, _ in productos_con_codigo_y_unidad 
+            for pc_display, _, _, _ in productos_con_codigo_y_unidad # Modificado para ignorar los nuevos elementos
             if valor_escrito in pc_display.lower()
         ]
         combo_producto["values"] = productos_filtrados_display
 
-    
     combo_producto.bind("<KeyRelease>", filtrar_productos)
 
     ttk.Label(ventana_salida_espera, text="Cantidad de salida:", style="CustomLabel.TLabel").grid(row=1, column=0, sticky="w", padx=10, pady=10)
     entry_cantidad = ttk.Entry(ventana_salida_espera, style="CustomEntry.TEntry")
     entry_cantidad.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
 
-    
     ttk.Label(ventana_salida_espera, text="Departamento:", style="CustomLabel.TLabel").grid(row=2, column=0, sticky="w", padx=10, pady=10)
-    
-    
-    nombres_departamentos_para_combobox, departamentos_map_global = obtener_departamentos_para_combobox() # Asigna a una variable global o pásala
-    
+
+    nombres_departamentos_para_combobox, departamentos_map_global = obtener_departamentos_para_combobox()
+
     departamento_var = tk.StringVar(ventana_salida_espera)
-    #if nombres_departamentos_para_combobox:
-        #departamento_var.set(nombres_departamentos_para_combobox[0])  
-    #else:
-        #departamento_var.set("") 
-        #messagebox.showwarning("Advertencia", "No se encontraron departamentos en la base de datos.")
 
     ttk.Combobox(ventana_salida_espera, textvariable=departamento_var, values=nombres_departamentos_para_combobox, style="TCombobox", state="readonly").grid(row=2, column=1, padx=10, pady=10, sticky="ew")
-
-   
 
     ttk.Button(ventana_salida_espera, text="Agregar a Salida en Espera", command=salida_espera, style="CustomButton.TButton").grid(row=3, column=0, columnspan=2, pady=15, padx=10, sticky="ew")
 
     ventana_salida_espera.grid_columnconfigure(1, weight=1)
+    ventana_salida_espera.mainloop()
 
 
    
@@ -1318,6 +1320,13 @@ def mostrar_inventario(ventana):
     entry_busqueda = ttk.Entry(frame_busqueda, style="CustomEntry.TEntry")
     entry_busqueda.pack(side=tk.LEFT)
 
+    
+    sin_factura_var = tk.BooleanVar(frame_busqueda)
+    checkbutton_sin_factura = ttk.Checkbutton(frame_busqueda, text="Mostrar Solo Sin Factura", variable=sin_factura_var,
+                                              command=lambda: mostrar_inventario_filtrado(), style="CustomLabel.TLabel")
+    checkbutton_sin_factura.pack(side=tk.LEFT, padx=10)
+
+
     categorias_mostrar = ["Todas"]
     mydb_cat = conectar_mysql()
     if mydb_cat:
@@ -1341,7 +1350,8 @@ def mostrar_inventario(ventana):
     frame_tabla = tk.Frame(ventana_inventario, bg="#A9A9A9")
     frame_tabla.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    tabla_productos = ttk.Treeview(frame_tabla, columns=("Código", "Categoría", "Producto", "Destino Entrada", "Destino Salida", "Entrada", "Salida", "Stock", "Unidad Medida", "Fecha Entrada", "Fecha Salida"), show="headings", style="Grid.Treeview")
+    
+    tabla_productos = ttk.Treeview(frame_tabla, columns=("Código", "Categoría", "Producto", "Destino Entrada", "Destino Salida", "Entrada", "Salida", "Stock", "Unidad Medida", "Fecha Entrada", "Fecha Salida", "Sin Factura"), show="headings", style="Grid.Treeview")
     tabla_productos.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     tabla_productos.heading("Código", text="Código", anchor=tk.W)
@@ -1355,6 +1365,8 @@ def mostrar_inventario(ventana):
     tabla_productos.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
     tabla_productos.heading("Fecha Entrada", text="Fecha Entrada", anchor=tk.W)
     tabla_productos.heading("Fecha Salida", text="Fecha Salida", anchor=tk.W)
+    
+    tabla_productos.heading("Sin Factura", text="Sin Factura", anchor=tk.CENTER)
 
     tabla_productos.column("Código", width=100)
     tabla_productos.column("Categoría", width=100)
@@ -1367,6 +1379,8 @@ def mostrar_inventario(ventana):
     tabla_productos.column("Unidad Medida", width=100)
     tabla_productos.column("Fecha Entrada", width=100)
     tabla_productos.column("Fecha Salida", width=100)
+   
+    tabla_productos.column("Sin Factura", width=80, anchor=tk.CENTER)
 
     barra_desplazamiento = ttk.Scrollbar(frame_tabla, orient=tk.VERTICAL, command=tabla_productos.yview)
     tabla_productos.configure(yscrollcommand=barra_desplazamiento.set)
@@ -1402,7 +1416,8 @@ def mostrar_inventario(ventana):
                 -- Última fecha de entrada
                 p.FechaEntrada AS FechaUltimaEntrada,
                 -- Última fecha de salida
-                p.FechaSalida AS FechaUltimaSalida
+                p.FechaSalida AS FechaUltimaSalida,
+                p.sin_factura -- MODIFICATION: Select SinFactura column
             FROM productos p
             LEFT JOIN categorias c ON p.CategoriaID = c.CategoriaID
             LEFT JOIN departamentos d ON p.DepartamentoID = d.DepartamentoID
@@ -1417,6 +1432,10 @@ def mostrar_inventario(ventana):
         if termino_busqueda:
             conditions.append("(p.Nombre LIKE %s OR p.Codigo LIKE %s)")
             params.extend([f"%{termino_busqueda}%", f"%{termino_busqueda}%"])
+        
+       
+        if sin_factura_var.get():
+            conditions.append("p.sin_factura = 1") 
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -1425,10 +1444,14 @@ def mostrar_inventario(ventana):
 
         try:
             cursor.execute(query, params)
+            
             productos_filtrados_db = cursor.fetchall()
-            for codigo, nombre_categoria, nombre_producto, destino_entrada, destino_salida, cantidad_entrada, cantidad_salida, stock, unidad_medida, fecha_entrada, fecha_salida in productos_filtrados_db:
+            for codigo, nombre_categoria, nombre_producto, destino_entrada, destino_salida, cantidad_entrada, cantidad_salida, stock, unidad_medida, fecha_entrada, fecha_salida, sin_factura in productos_filtrados_db:
                 fecha_entrada_str = fecha_entrada.strftime("%Y-%m-%d") if isinstance(fecha_entrada, (datetime.date, datetime.datetime)) else ""
                 fecha_salida_str = fecha_salida.strftime("%Y-%m-%d") if isinstance(fecha_salida, (datetime.date, datetime.datetime)) else ""
+                
+                
+                sin_factura_str = "Sí" if sin_factura else "No"
 
                 tabla_productos.insert("", tk.END, values=(
                     codigo,
@@ -1441,7 +1464,8 @@ def mostrar_inventario(ventana):
                     stock,
                     unidad_medida if unidad_medida else "",
                     fecha_entrada_str,
-                    fecha_salida_str
+                    fecha_salida_str,
+                    sin_factura_str 
                 ))
         except mysql.connector.Error as err:
             messagebox.showerror("Error", f"Error al mostrar el inventario: {err}", parent=ventana_inventario)
@@ -1465,6 +1489,13 @@ def mostrar_inventario(ventana):
         if categoria_nombre != "Todas":
             query_total += " WHERE c.NombreCategoria = %s"
             params_total.append(categoria_nombre)
+        
+        
+        if sin_factura_var.get():
+            if params_total:
+                query_total += " AND p.sin_factura = 1"
+            else:
+                query_total += " WHERE p.sin_factura = 1"
 
         try:
             cursor.execute(query_total, params_total)
@@ -1524,22 +1555,29 @@ def mostrar_inventario(ventana):
             try:
                 mydb.start_transaction()
 
-                cursor.execute("SELECT ProductoID, UnidadMedida FROM productos WHERE Codigo = %s", (codigo_producto_seleccionado,))
+                cursor.execute("SELECT ProductoID, UnidadMedida, sin_factura FROM productos WHERE Codigo = %s", (codigo_producto_seleccionado,))
                 producto_result = cursor.fetchone() 
 
                 if not producto_result:
                     messagebox.showerror("Error", "Producto no encontrado.", parent=ventana_entrada)
                     mydb.rollback()
                     return
+                
                 producto_id = producto_result[0]
-                unidad_medida = producto_result[1] 
+                unidad_medida = producto_result[1]
+                # Obtenemos el valor de sin_factura directamente del producto
+                es_sin_factura_producto = producto_result[2] if producto_result[2] is not None else 0 # Asegura 0 si es NULL
 
                 sql_actualizar_stock = "UPDATE productos SET Stock = Stock + %s, FechaEntrada = %s WHERE ProductoID = %s "
                 val_actualizar_stock = (cantidad, fecha, producto_id)
                 cursor.execute(sql_actualizar_stock, val_actualizar_stock)
 
-                sql_insertar_entrada = "INSERT INTO entradas (ProductoID, CodigoProducto, Cantidad, FechaEntrada, Destino) VALUES (%s, %s, %s, %s, 'Almacén principal')"
-                val_insertar_entrada = (producto_id, codigo_producto_seleccionado, cantidad, fecha)
+                # --- ¡LA MODIFICACIÓN CLAVE ESTÁ AQUÍ! ---
+                # El destino SIEMPRE será 'Almacén principal' para esta función
+                destino_entrada = 'Almacén principal' 
+                
+                sql_insertar_entrada = "INSERT INTO entradas (ProductoID, CodigoProducto, Cantidad, FechaEntrada, Destino, sin_factura) VALUES (%s, %s, %s, %s, %s, %s)"
+                val_insertar_entrada = (producto_id, codigo_producto_seleccionado, cantidad, fecha, destino_entrada, es_sin_factura_producto)
                 cursor.execute(sql_insertar_entrada, val_insertar_entrada)
 
                 mydb.commit()
@@ -1548,12 +1586,9 @@ def mostrar_inventario(ventana):
                 mostrar_tabla(categoria_seleccionada_mostrar.get(), entry_busqueda.get())
                 ventana_entrada.destroy()
 
-            except mysql.connector.Error as err:
+            except Exception as err:
                 mydb.rollback()
                 messagebox.showerror("Error al realizar entrada", f"Error: {err}", parent=ventana_entrada)
-            except Exception as e:
-                mydb.rollback()
-                messagebox.showerror("Error Inesperado", f"Ocurrió un error inesperado: {e}", parent=ventana_entrada)
             finally:
                 if mydb and mydb.is_connected():
                     if cursor: cursor.close()
@@ -1627,27 +1662,24 @@ def mostrar_inventario(ventana):
                             "Direccion de informacion y Comunicacion", "Direccion General de Formacion"
                         ]
                         for dep_name in departamentos_predefinidos:
-                            agregar_departamento_a_db(dep_name)
+                            agregar_departamento_a_db(dep_name) # Asegúrate de que esta función esté definida
                         
                         cursor_dep_inner.execute("SELECT NombreDepartamento FROM departamentos ORDER BY NombreDepartamento")
                         departamentos_cargados = [row[0] for row in cursor_dep_inner.fetchall()]
 
-                except mysql.connector.Error as err:
+                except Exception as err: # Captura excepciones más generales para evitar que el programa se detenga
                     messagebox.showerror("Error de BD", f"Error al cargar departamentos: {err}", parent=ventana_salida)
                 finally:
                     if cursor_dep_inner: cursor_dep_inner.close()
                     if mydb_dep_inner and mydb_dep_inner.is_connected(): mydb_dep_inner.close()
 
-            
             departamentos_con_opcion_agregar = ["-- Agregar Nuevo --"] + departamentos_cargados
             
-           
             if combo_departamento_salida: 
                 combo_departamento_salida['values'] = departamentos_con_opcion_agregar
                 if newly_added_dep_name and newly_added_dep_name in departamentos_cargados:
                     departamento_var_salida.set(newly_added_dep_name) 
                 elif not departamento_var_salida.get() or departamento_var_salida.get() not in departamentos_con_opcion_agregar:
-                    
                     if departamentos_cargados:
                         departamento_var_salida.set("")
                     else:
@@ -1660,17 +1692,13 @@ def mostrar_inventario(ventana):
             """
             selected_value = departamento_var_salida.get()
             if selected_value == "-- Agregar Nuevo --":
-                
-                agregar_nuevo_departamento_ui(ventana_salida, callback_on_success=cargar_y_actualizar_departamentos)
+                agregar_nuevo_departamento_ui(ventana_salida, callback_on_success=cargar_y_actualizar_departamentos) # Asegúrate de que esta función esté definida
 
-
-       
         ttk.Label(ventana_salida, text="Departamento:", style="CustomLabel.TLabel").grid(row=0, column=0, padx=10, pady=10, sticky="w")
         combo_departamento_salida = ttk.Combobox(ventana_salida, textvariable=departamento_var_salida, style="TCombobox", state="readonly")
         combo_departamento_salida.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
         combo_departamento_salida.bind("<<ComboboxSelected>>", on_departamento_selection)
 
-       
         cargar_y_actualizar_departamentos()
         
         if departamento_var_salida.get() == "-- Agregar Nuevo --" and combo_departamento_salida['values']:
@@ -1679,7 +1707,6 @@ def mostrar_inventario(ventana):
             else:
                 departamento_var_salida.set("-- Seleccione --")
 
-        
         ttk.Label(ventana_salida, text="Cantidad:", style="CustomLabel.TLabel").grid(row=1, column=0, padx=10, pady=10, sticky="w")
         entry_cantidad_salida = ttk.Entry(ventana_salida, style="CustomEntry.TEntry")
         entry_cantidad_salida.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
@@ -1688,14 +1715,14 @@ def mostrar_inventario(ventana):
         entry_fecha_salida = ttk.Entry(ventana_salida, style="CustomEntry.TEntry")
         entry_fecha_salida.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
         entry_fecha_salida.insert(0, datetime.datetime.now().strftime("%Y-%m-%d"))
-        ttk.Button(ventana_salida, text="Calendario", command=lambda: abrir_calendario(ventana_salida, entry_fecha_salida), style="CustomButton.TButton").grid(row=2, column=2, padx=10, pady=10)
+        ttk.Button(ventana_salida, text="Calendario", command=lambda: abrir_calendario(ventana_salida, entry_fecha_salida), style="CustomButton.TButton").grid(row=2, column=2, padx=10, pady=10) # Asegúrate de que abrir_calendario esté definida
 
         ttk.Label(ventana_salida, text="Número de Requisición:", style="CustomLabel.TLabel").grid(row=3, column=0, padx=10, pady=10, sticky="w")
         entry_numero_requisicion = ttk.Entry(ventana_salida, style="CustomEntry.TEntry")
         entry_numero_requisicion.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
 
         def confirmar_salida():
-            departamento_nombre = departamento_var_salida.get().strip() # Usar departamento_var_salida
+            departamento_nombre = departamento_var_salida.get().strip() 
             cantidad_str = entry_cantidad_salida.get().strip()
             fecha_str = entry_fecha_salida.get().strip()
             numero_requisicion = entry_numero_requisicion.get().strip()
@@ -1728,7 +1755,8 @@ def mostrar_inventario(ventana):
             try:
                 mydb.start_transaction()
 
-                cursor.execute("SELECT ProductoID, Stock, UnidadMedida FROM productos WHERE Codigo = %s", (codigo_producto_seleccionado,))
+                # --- MODIFICACIÓN CLAVE: Obtener también el campo sin_factura del producto ---
+                cursor.execute("SELECT ProductoID, Stock, UnidadMedida, sin_factura FROM productos WHERE Codigo = %s", (codigo_producto_seleccionado,))
                 resultado_producto = cursor.fetchone()
 
                 if not resultado_producto:
@@ -1738,7 +1766,9 @@ def mostrar_inventario(ventana):
 
                 producto_id = resultado_producto[0]
                 stock_actual = resultado_producto[1]
-                unidad_medida_salida_name = resultado_producto[2] # Nombre de la unidad de medida
+                unidad_medida_salida_name = resultado_producto[2]
+                # --- Capturamos el valor de sin_factura del producto ---
+                es_sin_factura_producto = resultado_producto[3] if resultado_producto[3] is not None else 0 # Asegura 0 si es NULL
 
                 if stock_actual >= cantidad:
                     query_departamento_salida_id = "SELECT DepartamentoID FROM departamentos WHERE NombreDepartamento = %s"
@@ -1754,26 +1784,22 @@ def mostrar_inventario(ventana):
                     val_actualizar_stock_departamento = (cantidad, fecha, departamento_salida_id, producto_id)
                     cursor.execute(sql_actualizar_stock_departamento, val_actualizar_stock_departamento)
 
-                    sql_insertar_salida = "INSERT INTO salidas (ProductoID, CodigoProducto, Cantidad, FechaSalida, DepartamentoID, NumeroRequisicion, UnidadMedida) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                    val_insertar_salida = (producto_id, codigo_producto_seleccionado, cantidad, fecha, departamento_salida_id, numero_requisicion, unidad_medida_salida_name)
+                    # --- MODIFICACIÓN CLAVE: Incluir sin_factura en la inserción de la salida ---
+                    sql_insertar_salida = "INSERT INTO salidas (ProductoID, CodigoProducto, Cantidad, FechaSalida, DepartamentoID, NumeroRequisicion, UnidadMedida, sin_factura) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+                    val_insertar_salida = (producto_id, codigo_producto_seleccionado, cantidad, fecha, departamento_salida_id, numero_requisicion, unidad_medida_salida_name, es_sin_factura_producto)
                     cursor.execute(sql_insertar_salida, val_insertar_salida)
 
                     mydb.commit()
                     messagebox.showinfo("Salida Realizada", f"{cantidad} {unidad_medida_salida_name} de {nombre_producto} (Código: {codigo_producto_seleccionado}) salieron para {departamento_nombre}.", parent=ventana_salida)
                     
-                    mostrar_tabla(categoria_seleccionada_mostrar.get(), entry_busqueda.get())
+                    mostrar_tabla(categoria_seleccionada_mostrar.get(), entry_busqueda.get()) # Asegúrate de que estas variables y funciones estén definidas
                     ventana_salida.destroy()
                 else:
                     messagebox.showerror("Error", "No hay suficiente stock para realizar la salida.", parent=ventana_salida)
 
-            except mysql.connector.Error as err:
+            except Exception as err: # Captura excepciones más generales para depuración
                 mydb.rollback()
-                messagebox.showerror("Error al realizar salida", f"Error de base de datos: {err}\n\n"
-                                                                f"Asegúrese de que las relaciones ON DELETE CASCADE estén configuradas o que la eliminación de registros relacionados se realice correctamente.",
-                                     parent=ventana_salida)
-            except Exception as e:
-                mydb.rollback()
-                messagebox.showerror("Error Inesperado", f"Ocurrió un error inesperado: {e}", parent=ventana_salida)
+                messagebox.showerror("Error al realizar salida", f"Ocurrió un error: {err}", parent=ventana_salida)
             finally:
                 if mydb and mydb.is_connected():
                     if cursor: cursor.close()
@@ -1782,6 +1808,9 @@ def mostrar_inventario(ventana):
         ttk.Button(ventana_salida, text="Confirmar Salida", command=confirmar_salida, style="CustomButton.TButton").grid(row=4, column=0, columnspan=3, pady=15, padx=10, sticky="ew")
         ventana_salida.grid_columnconfigure(1, weight=1)
         ventana_salida.wait_window()
+
+    
+    mostrar_tabla()
 
     def editar_producto(codigo_producto_seleccionado):
         """Permite editar los detalles de un producto seleccionado, con más campos editables y Combobox para Unidad de Medida."""
@@ -2486,22 +2515,35 @@ def mostrar_consumo_periodos(consumo_semanal, consumo_mensual):
 
                      #GENERA UNA VENTANA CON LOS PRODUCTOS CON BAJO STOCK
 
+
+
+
 def generar_reporte_bajo_stock():
     """Genera un reporte de productos con bajo stock desde la base de datos MySQL y almacena los datos."""
-    global datos_reportes_para_guardar
+    global datos_reportes_para_guardar # Asumo que esta variable global se usa para algo más
+    
+    # Crea la ventana del reporte
     ventana_reporte = tk.Toplevel(ventana)
     ventana_reporte.title("Reporte de Bajo Stock")
     ventana_reporte.configure(bg="#A9A9A9")
+    ventana_reporte.geometry("700x500") # Puedes ajustar el tamaño si es necesario
 
+    # Configura el estilo para la ventana del reporte
     style = ttk.Style(ventana_reporte)
     style.theme_use('clam')
     style.configure("CustomLabel.TLabel", foreground="#ffffff", background="#A9A9A9", font=("Segoe UI", 10, "bold"))
     style.configure("Grid.Treeview", foreground="#000000", background="#ffffff", font=("Segoe UI", 10))
     style.configure("Grid.Treeview.Heading", foreground="#000000", background="#d9d9d9", font=("Segoe UI", 10, "bold"))
     style.map("Grid.Treeview", background=[('selected', '#bddfff')], foreground=[('selected', '#000000')])
+    
+    # Marco para los botones y controles (similar a tus otros reportes)
+    frame_controles = tk.Frame(ventana_reporte, bg="#A9A9A9")
+    frame_controles.pack(pady=10, padx=10, fill=tk.X)
 
+    # Umbral de stock mínimo
     umbral_stock_minimo = 10
     productos_bajo_stock = []
+    
     mydb = conectar_mysql()
     if mydb:
         cursor = mydb.cursor()
@@ -2509,42 +2551,64 @@ def generar_reporte_bajo_stock():
             SELECT Codigo, Nombre, Stock, UnidadMedida
             FROM productos
             WHERE Stock < %s
+            ORDER BY Stock ASC
         """
         try:
             cursor.execute(query, (umbral_stock_minimo,))
             productos_bajo_stock_db = cursor.fetchall()
             for codigo, nombre, stock, unidad_medida in productos_bajo_stock_db:
                 productos_bajo_stock.append({"Código": codigo, "Producto": nombre, "Stock Actual": stock, "Unidad Medida": unidad_medida})
-        except mysql.connector.Error as err:
-            messagebox.showerror("Error", f"Error al obtener productos con bajo stock: {err}")
+        except Exception as err: # Usar Exception para capturar cualquier error de DB o Python
+            messagebox.showerror("Error", f"Error al obtener productos con bajo stock: {err}", parent=ventana_reporte)
         finally:
-            cursor.close()
-            mydb.close()
+            if cursor: cursor.close()
+            if mydb and mydb.is_connected(): mydb.close()
 
-    datos_reporte = [] 
+    # Crea y popula la tabla si hay productos con bajo stock
+    tabla_bajo_stock = None # Inicializa tabla_bajo_stock aquí
+    datos_reporte = [] # Para almacenar los datos que se podrían exportar
+
     if productos_bajo_stock:
+        # Crea el Treeview
         tabla_bajo_stock = ttk.Treeview(ventana_reporte, columns=("Código", "Producto", "Stock Actual", "Unidad Medida"), show="headings", style="Grid.Treeview")
-        tabla_bajo_stock.pack(fill=tk.BOTH, expand=True)
+        tabla_bajo_stock.pack(fill=tk.BOTH, expand=True, padx=10, pady=5) # Añadido padx/pady para estética
+        
         tabla_bajo_stock.heading("Código", text="Código", anchor=tk.W)
         tabla_bajo_stock.heading("Producto", text="Producto", anchor=tk.W)
         tabla_bajo_stock.heading("Stock Actual", text="Stock Actual", anchor=tk.W)
         tabla_bajo_stock.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
+        
         tabla_bajo_stock.column("Código", width=100)
-        tabla_bajo_stock.column("Producto", width=150)
+        tabla_bajo_stock.column("Producto", width=180) # Ajustado para más espacio
         tabla_bajo_stock.column("Stock Actual", width=100)
-        tabla_bajo_stock.column("Unidad Medida", width=100)
+        tabla_bajo_stock.column("Unidad Medida", width=120) # Ajustado para más espacio
 
         for producto in productos_bajo_stock:
             tabla_bajo_stock.insert("", tk.END, values=(producto["Código"], producto["Producto"], producto["Stock Actual"], producto["Unidad Medida"]))
-            datos_reporte.append(producto)
+            datos_reporte.append(producto) # Almacena los datos para una posible exportación
 
+        # Agrega la barra de desplazamiento
         scrollbar_y = ttk.Scrollbar(ventana_reporte, orient="vertical", command=tabla_bajo_stock.yview)
         scrollbar_y.pack(side="right", fill="y")
         tabla_bajo_stock.configure(yscrollcommand=scrollbar_y.set)
+        
+        # BOTÓN DE EXPORTAR A PDF
+        boton_exportar_pdf = ttk.Button(frame_controles, text="Exportar a PDF",
+                                        command=lambda: exportar_tabla_pdf(tabla_bajo_stock, "Reporte de Bajo Stock"))
+        boton_exportar_pdf.pack(side=tk.RIGHT, padx=(10, 0)) # Empaca en el frame_controles
     else:
-        messagebox.showinfo("Reporte de Bajo Stock", "No hay productos con bajo stock.")
+        # Muestra un mensaje si no hay productos bajo stock
+        tk.Label(ventana_reporte, text="No hay productos con bajo stock en este momento. ¡Excelente gestión!",
+                 style="CustomLabel.TLabel").pack(pady=20)
+        # Oculta el botón de exportar si no hay datos
+        boton_exportar_pdf = ttk.Button(frame_controles, text="Exportar a PDF", state=tk.DISABLED)
+        boton_exportar_pdf.pack(side=tk.RIGHT, padx=(10, 0))
 
-    datos_reportes_para_guardar["Bajo Stock"] = datos_reporte
+    # Guardar los datos del reporte si es necesario (asumo que `datos_reportes_para_guardar` es una lista global)
+    datos_reportes_para_guardar = datos_reporte # Esto es solo si necesitas los datos para otro propósito
+
+    ventana_reporte.mainloop() # Inicia el loop de eventos para esta ventana Toplevel
+
     
            
 
@@ -2571,7 +2635,7 @@ def generar_reporte_entradas():
 
     ventana_reporte_entradas = tk.Toplevel(ventana)
     ventana_reporte_entradas.title("Reporte de Entradas")
-    ventana_reporte_entradas.geometry("1000x600")
+    ventana_reporte_entradas.geometry("1200x600") # Increased width to accommodate new column
     ventana_reporte_entradas.configure(bg="#A9A9A9")
 
     ventana_reporte_entradas.protocol("WM_DELETE_WINDOW", lambda: ventana_reporte_entradas.destroy())
@@ -2622,11 +2686,12 @@ def generar_reporte_entradas():
     frame_tabla_contenedor = tk.Frame(ventana_reporte_entradas, bg="#A9A9A9")
     frame_tabla_contenedor.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+    # UPDATED: Added "Sin Factura" to columns
     tabla_entradas = ttk.Treeview(frame_tabla_contenedor,
-                                  columns=("Código", "Producto", "Cantidad", "Unidad Medida", "Fecha", "Destino", "EntradaID"),
+                                  columns=("Código", "Producto", "Cantidad", "Unidad Medida", "Fecha", "Destino", "EntradaID", "Sin Factura"),
                                   show="headings",
                                   style="Grid.Treeview")
-    tabla_entradas.column("EntradaID", width=0, stretch=tk.NO)
+    tabla_entradas.column("EntradaID", width=0, stretch=tk.NO) # Keep EntradaID hidden
 
     tabla_entradas.heading("Código", text="Código", anchor=tk.W)
     tabla_entradas.heading("Producto", text="Producto", anchor=tk.W)
@@ -2634,6 +2699,7 @@ def generar_reporte_entradas():
     tabla_entradas.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W)
     tabla_entradas.heading("Fecha", text="Fecha", anchor=tk.W)
     tabla_entradas.heading("Destino", text="Destino", anchor=tk.W)
+    tabla_entradas.heading("Sin Factura", text="Sin Factura", anchor=tk.CENTER) # New column heading
 
     tabla_entradas.column("Código", width=100)
     tabla_entradas.column("Producto", width=180)
@@ -2641,6 +2707,7 @@ def generar_reporte_entradas():
     tabla_entradas.column("Unidad Medida", width=100)
     tabla_entradas.column("Fecha", width=100)
     tabla_entradas.column("Destino", width=150)
+    tabla_entradas.column("Sin Factura", width=80, anchor=tk.CENTER) # New column width
 
     scrollbar_vertical = ttk.Scrollbar(frame_tabla_contenedor, orient="vertical", command=tabla_entradas.yview)
     scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y)
@@ -2659,6 +2726,7 @@ def generar_reporte_entradas():
 
         cursor = mydb.cursor()
         try:
+            # MODIFIED: Changed to e.sin_factura based on your request
             sql_query = """
                 SELECT
                     e.CodigoProducto,
@@ -2667,7 +2735,8 @@ def generar_reporte_entradas():
                     p.UnidadMedida AS UnidadMedida,
                     e.FechaEntrada,
                     e.Destino,
-                    e.EntradaID
+                    e.EntradaID,
+                    e.sin_factura  -- <--- Changed to lowercase 'sin_factura'
                 FROM
                     entradas e
                 JOIN
@@ -2693,7 +2762,10 @@ def generar_reporte_entradas():
             registros = cursor.fetchall()
 
             for registro in registros:
-                tabla_entradas.insert("", "end", values=registro)
+                # UPDATED: Format SinFactura for display (0/1 to "No"/"Sí")
+                registro_list = list(registro)
+                registro_list[7] = "Sí" if registro_list[7] == 1 else "No"
+                tabla_entradas.insert("", "end", values=tuple(registro_list))
 
         except mysql.connector.Error as err:
             messagebox.showerror("Error de Base de Datos", f"Error al cargar el reporte de entradas: {err}")
@@ -2727,6 +2799,7 @@ def generar_reporte_entradas():
             fecha_actual = values[4]
             destino_actual = values[5]
             entrada_id = values[6]
+            sin_factura_actual = values[7] == "Sí" # Convert "Sí"/"No" back to boolean for the Checkbutton
 
             print(f"DEBUG: Editando entrada con EntradaID: {entrada_id}")
 
@@ -2740,6 +2813,7 @@ def generar_reporte_entradas():
             fecha_var = tk.StringVar(value=fecha_actual)
             destino_var = tk.StringVar(value=destino_actual)
             unidad_medida_var = tk.StringVar(value=unidad_medida_actual)
+            sin_factura_var = tk.BooleanVar(value=sin_factura_actual) # New BooleanVar for checkbox
 
             def cargar_unidades_desde_db():
                 mydb = conectar_mysql()
@@ -2801,12 +2875,18 @@ def generar_reporte_entradas():
             entry_destino_edicion = ttk.Entry(ventana_edicion_entrada, textvariable=destino_var, width=30)
             entry_destino_edicion.grid(row=5, column=1, padx=5, pady=5, sticky="ew")
 
+            # NEW: Sin Factura Checkbox
+            tk.Checkbutton(ventana_edicion_entrada, text="Sin Factura", variable=sin_factura_var,
+                           fg="#ffffff", bg="#A9A9A9", selectcolor="#A9A9A9").grid(row=6, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+
+
             def guardar_cambios_entrada():
                 """Guarda los cambios de una entrada y ajusta el stock del producto."""
                 nueva_cantidad_str = cantidad_var.get().strip()
                 nueva_unidad_medida = unidad_medida_var.get().strip()
                 nuevo_destino = destino_var.get().strip()
                 nueva_fecha_str = fecha_var.get().strip()
+                nueva_sin_factura = 1 if sin_factura_var.get() else 0 # Get boolean value for DB
 
                 try:
                     nueva_cantidad = float(nueva_cantidad_str)
@@ -2837,7 +2917,7 @@ def generar_reporte_entradas():
                     try:
                         mydb.start_transaction()
 
-                        
+                        # Get original product ID and quantity from 'entradas'
                         cursor.execute("SELECT ProductoID, Cantidad FROM entradas WHERE EntradaID = %s", (entrada_id,))
                         producto_id_cantidad_original_result = cursor.fetchone()
                         if not producto_id_cantidad_original_result:
@@ -2847,14 +2927,14 @@ def generar_reporte_entradas():
                         producto_id = producto_id_cantidad_original_result[0]
                         cantidad_original_db = float(producto_id_cantidad_original_result[1])
 
-                       
+                        # Calculate the difference in quantity for stock adjustment
                         diferencia_cantidad = nueva_cantidad - cantidad_original_db
 
-                        
+                        # Update stock in 'productos' table
                         query_update_stock = "UPDATE productos SET Stock = Stock + %s WHERE ProductoID = %s"
                         cursor.execute(query_update_stock, (diferencia_cantidad, producto_id))
 
-                        
+                        # Update UnidadMedida in 'productos' table
                         query_update_producto_unidad_medida = """
                             UPDATE productos
                             SET UnidadMedida = %s
@@ -2862,15 +2942,15 @@ def generar_reporte_entradas():
                         """
                         cursor.execute(query_update_producto_unidad_medida, (nueva_unidad_medida, producto_id))
 
-                       
+                        # UPDATED: Update the 'entradas' record, including sin_factura (lowercase)
                         query_update_entrada = """
                             UPDATE entradas
-                            SET Cantidad = %s, UnidadMedida = %s, FechaEntrada = %s, Destino = %s
+                            SET Cantidad = %s, UnidadMedida = %s, FechaEntrada = %s, Destino = %s, sin_factura = %s
                             WHERE EntradaID = %s
                         """
-                        cursor.execute(query_update_entrada, (nueva_cantidad, nueva_unidad_medida, nueva_fecha, nuevo_destino, entrada_id))
+                        cursor.execute(query_update_entrada, (nueva_cantidad, nueva_unidad_medida, nueva_fecha, nuevo_destino, nueva_sin_factura, entrada_id))
 
-                       
+                        # Recalculate and update FechaEntrada in 'productos' to the latest entry date for that product
                         cursor.execute("""
                             SELECT MAX(FechaEntrada)
                             FROM entradas
@@ -2884,7 +2964,6 @@ def generar_reporte_entradas():
                             else:
                                 max_fecha_entrada_for_product = max_fecha_entrada_result[0]
                         
-                        
                         query_update_product_latest_entry_date = """
                             UPDATE productos
                             SET FechaEntrada = %s
@@ -2893,7 +2972,6 @@ def generar_reporte_entradas():
                         cursor.execute(query_update_product_latest_entry_date, (max_fecha_entrada_for_product, producto_id))
                         
 
-
                         mydb.commit()
                         messagebox.showinfo("Éxito", "Entrada actualizada y stock ajustado correctamente.", parent=ventana_edicion_entrada)
                         aplicar_filtro_entradas()
@@ -2901,14 +2979,13 @@ def generar_reporte_entradas():
                             global categoria_seleccionada_mostrar, entry_busqueda, mostrar_tabla
                             if 'mostrar_tabla' in globals() and callable(mostrar_tabla):
                                 print("DEBUG: Llamando a mostrar_tabla desde reporte_entradas para refrescar inventario.")
-                                
+                                # Assuming mostrar_tabla takes category and search filters
                                 mostrar_tabla(categoria_seleccionada_mostrar.get(), entry_busqueda.get())
                             else:
                                 print("WARNING: 'mostrar_tabla' no es accesible globalmente o no es una función llamable desde generar_reporte_entradas. El inventario no se refrescará automáticamente.")
                         except NameError as e:
                             print(f"WARNING: Variables globales para mostrar_tabla no encontradas: {e}. El inventario no se refrescará automáticamente.")
                         
-
                         ventana_edicion_entrada.destroy()
 
                     except mysql.connector.Error as err:
@@ -2922,7 +2999,7 @@ def generar_reporte_entradas():
                             cursor.close()
                             mydb.close()
 
-            ttk.Button(ventana_edicion_entrada, text="Guardar Cambios", command=guardar_cambios_entrada).grid(row=6, column=0, columnspan=3, pady=10)
+            ttk.Button(ventana_edicion_entrada, text="Guardar Cambios", command=guardar_cambios_entrada).grid(row=7, column=0, columnspan=3, pady=10) # Adjusted row for button
             ventana_edicion_entrada.grid_columnconfigure(1, weight=1)
             ventana_edicion_entrada.mainloop()
         else:
@@ -2966,7 +3043,7 @@ def generar_reporte_entradas():
                         query_ajustar_stock = "UPDATE productos SET Stock = Stock - %s WHERE ProductoID = %s"
                         cursor.execute(query_ajustar_stock, (cantidad_entrada, producto_id))
 
-                       
+                        # Recalculate and update FechaEntrada in 'productos' to the latest entry date for that product
                         cursor.execute("""
                             SELECT MAX(FechaEntrada)
                             FROM entradas
@@ -2986,14 +3063,12 @@ def generar_reporte_entradas():
                             WHERE ProductoID = %s
                         """
                         cursor.execute(query_update_product_latest_entry_date, (max_fecha_entrada_for_product, producto_id))
-                       
-
-
+                        
                         mydb.commit()
                         messagebox.showinfo("Eliminación Exitosa", "La entrada ha sido eliminada y el stock ajustado correctamente.", parent=ventana_reporte_entradas)
                         aplicar_filtro_entradas()
 
-                       
+                        # Refresh main inventory display if possible
                         try:
                             global categoria_seleccionada_mostrar, entry_busqueda, mostrar_tabla
                             if 'mostrar_tabla' in globals() and callable(mostrar_tabla):
@@ -3003,7 +3078,7 @@ def generar_reporte_entradas():
                                 print("WARNING: 'mostrar_tabla' no es accesible globalmente o no es una función llamable. El inventario no se refrescará automáticamente después de la eliminación.")
                         except NameError as e:
                             print(f"WARNING: Variables globales para mostrar_tabla no encontradas: {e}. El inventario no se refrescará automáticamente después de la eliminación.")
-                       
+                        
                     except mysql.connector.Error as err:
                         mydb.rollback()
                         messagebox.showerror("Error", f"Error al eliminar la entrada o ajustar el stock: {err}", parent=ventana_reporte_entradas)
@@ -3035,6 +3110,7 @@ def generar_reporte_entradas():
     tabla_entradas.bind("<Button-3>", mostrar_menu_contextual_entradas)
 
     ventana_reporte_entradas.mainloop()
+    
 
 
 
@@ -3110,8 +3186,8 @@ def generar_reporte_salidas():
     frame_tabla_contenedor_salidas = tk.Frame(ventana_reporte_salidas, bg="#A9A9A9")
     frame_tabla_contenedor_salidas.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    
-    tree = ttk.Treeview(frame_tabla_contenedor_salidas, columns=("Código", "Producto", "Cantidad", "Unidad Medida", "Fecha", "Departamento", "Requisición", "SalidaID"), show="headings", style="Grid.Treeview")
+    # --- MODIFICACIÓN 1: Añadir "Sin Factura" a las columnas del Treeview ---
+    tree = ttk.Treeview(frame_tabla_contenedor_salidas, columns=("Código", "Producto", "Cantidad", "Unidad Medida", "Fecha", "Departamento", "Requisición", "Sin Factura", "SalidaID"), show="headings", style="Grid.Treeview")
     tree.heading("Código", text="Código", anchor=tk.W)
     tree.heading("Producto", text="Producto", anchor=tk.W)
     tree.heading("Cantidad", text="Cantidad", anchor=tk.W)
@@ -3119,6 +3195,7 @@ def generar_reporte_salidas():
     tree.heading("Fecha", text="Fecha", anchor=tk.W)
     tree.heading("Departamento", text="Departamento", anchor=tk.W) 
     tree.heading("Requisición", text="Requisición", anchor=tk.W)
+    tree.heading("Sin Factura", text="Sin Factura", anchor=tk.W) # Nueva cabecera
     tree.column("SalidaID", width=0, stretch=tk.NO) 
 
     tree.column("Código", width=100)
@@ -3128,6 +3205,7 @@ def generar_reporte_salidas():
     tree.column("Fecha", width=100)
     tree.column("Departamento", width=150) 
     tree.column("Requisición", width=120)
+    tree.column("Sin Factura", width=80) # Nueva columna
 
     scrollbar = ttk.Scrollbar(frame_tabla_contenedor_salidas, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=scrollbar.set)
@@ -3155,7 +3233,8 @@ def generar_reporte_salidas():
                     s.UnidadMedida,
                     s.FechaSalida,
                     d.NombreDepartamento,
-                    s.NumeroRequisicion
+                    s.NumeroRequisicion,
+                    s.sin_factura -- --- MODIFICACIÓN 2: Seleccionar la columna sin_factura de la tabla 'salidas' ---
                 FROM
                     salidas s
                 JOIN
@@ -3182,8 +3261,10 @@ def generar_reporte_salidas():
             cursor.execute(sql_query, tuple(params))
             salidas_db = cursor.fetchall()
 
-            for salida_id, codigo, producto_nombre, cantidad, unidad_medida, fecha, departamento_nombre, requisicion in salidas_db:
-                tree.insert("", "end", values=(codigo, producto_nombre, cantidad, unidad_medida, fecha.strftime("%Y-%m-%d"), departamento_nombre, requisicion, salida_id))
+            for salida_id, codigo, producto_nombre, cantidad, unidad_medida, fecha, departamento_nombre, requisicion, sin_factura_db in salidas_db: # --- MODIFICACIÓN 3: Añadir sin_factura_db al unpacking ---
+                # --- MODIFICACIÓN 4: Convertir el valor booleano a "Sí" o "No" para la visualización ---
+                sin_factura_display = "Sí" if sin_factura_db else "No"
+                tree.insert("", "end", values=(codigo, producto_nombre, cantidad, unidad_medida, fecha.strftime("%Y-%m-%d"), departamento_nombre, requisicion, sin_factura_display, salida_id))
 
         except mysql.connector.Error as err:
             messagebox.showerror("Error", f"Error al cargar las salidas: {err}")
@@ -3206,7 +3287,8 @@ def generar_reporte_salidas():
             fecha_actual = values[4]
             departamento_nombre_actual = values[5] 
             requisicion_actual = values[6]
-            salida_id = values[7] 
+            sin_factura_actual = True if values[7] == "Sí" else False # --- MODIFICACIÓN 5: Obtener el valor actual de sin_factura ---
+            salida_id = values[8] # El índice de SalidaID cambia porque hemos añadido una columna
 
             print(f"DEBUG: Editando salida con SalidaID: {salida_id}")
 
@@ -3222,6 +3304,7 @@ def generar_reporte_salidas():
             fecha_var = tk.StringVar(value=fecha_actual)
             departamento_var = tk.StringVar(value=departamento_nombre_actual)
             requisicion_var = tk.StringVar(value=requisicion_actual)
+            sin_factura_var = tk.BooleanVar(value=sin_factura_actual) # --- MODIFICACIÓN 6: Variable para el Checkbutton ---
 
             
             def cargar_departamentos_desde_db():
@@ -3286,11 +3369,11 @@ def generar_reporte_salidas():
             
             tk.Label(ventana_edicion_salida, text="Unidad Medida:", fg="#ffffff", bg="#A9A9A9").grid(row=3, column=0, padx=5, pady=5, sticky="w")
             combo_unidad_medida_edicion = ttk.Combobox(ventana_edicion_salida,
-                                                       textvariable=unidad_medida_var,
-                                                       values=unidades_disponibles, 
-                                                       width=30,
-                                                       style="TCombobox",
-                                                       state="readonly")
+                                                         textvariable=unidad_medida_var,
+                                                         values=unidades_disponibles, 
+                                                         width=30,
+                                                         style="TCombobox",
+                                                         state="readonly")
             combo_unidad_medida_edicion.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
             if unidad_medida_actual in unidades_disponibles:
                 combo_unidad_medida_edicion.set(unidad_medida_actual)
@@ -3307,11 +3390,11 @@ def generar_reporte_salidas():
 
             tk.Label(ventana_edicion_salida, text="Departamento:", fg="#ffffff", bg="#A9A9A9").grid(row=5, column=0, padx=5, pady=5, sticky="w")
             combo_departamento_edicion = ttk.Combobox(ventana_edicion_salida,
-                                                       textvariable=departamento_var,
-                                                       values=departamentos_disponibles,
-                                                       width=30,
-                                                       style="TCombobox",
-                                                       state="readonly")
+                                                         textvariable=departamento_var,
+                                                         values=departamentos_disponibles,
+                                                         width=30,
+                                                         style="TCombobox",
+                                                         state="readonly")
             combo_departamento_edicion.grid(row=5, column=1, padx=5, pady=5, sticky="ew")
             if departamento_nombre_actual in departamentos_disponibles:
                 combo_departamento_edicion.set(departamento_nombre_actual)
@@ -3325,6 +3408,9 @@ def generar_reporte_salidas():
             entry_requisicion_edicion = ttk.Entry(ventana_edicion_salida, textvariable=requisicion_var, width=30)
             entry_requisicion_edicion.grid(row=6, column=1, padx=5, pady=5, sticky="ew")
 
+            # --- MODIFICACIÓN 7: Añadir el Checkbutton para "Sin Factura" ---
+            tk.Checkbutton(ventana_edicion_salida, text="Sin Factura", variable=sin_factura_var, fg="#ffffff", bg="#A9A9A9").grid(row=7, column=0, padx=5, pady=5, sticky="w")
+
 
             def guardar_cambios_salida():
                 """Guarda los cambios de una salida y ajusta el stock del producto, y actualiza la FechaSalida y Departamento en productos."""
@@ -3333,6 +3419,7 @@ def generar_reporte_salidas():
                 nueva_fecha_str = fecha_var.get().strip()
                 nuevo_departamento_nombre = departamento_var.get().strip()
                 nueva_requisicion = requisicion_var.get().strip()
+                nueva_sin_factura_val = sin_factura_var.get() # --- MODIFICACIÓN 8: Obtener el valor del Checkbutton ---
 
                 
                 try:
@@ -3384,7 +3471,7 @@ def generar_reporte_salidas():
                             return
                         nuevo_departamento_id = nuevo_departamento_id_result[0]
 
-                       
+                        
                         ajuste_stock = cantidad_original - nueva_cantidad
 
                         
@@ -3395,7 +3482,7 @@ def generar_reporte_salidas():
                         """
                         cursor.execute(query_update_stock, (ajuste_stock, producto_id_original))
 
-                       
+                        
                         query_update_producto_unidad_medida = """
                             UPDATE productos
                             SET UnidadMedida = %s
@@ -3404,13 +3491,13 @@ def generar_reporte_salidas():
                         cursor.execute(query_update_producto_unidad_medida, (nueva_unidad_medida, producto_id_original))
 
 
-                       
+                        # --- MODIFICACIÓN 9: Añadir sin_factura a la actualización de la salida ---
                         query_update_salida = """
                             UPDATE salidas
-                            SET Cantidad = %s, UnidadMedida = %s, FechaSalida = %s, DepartamentoID = %s, NumeroRequisicion = %s
+                            SET Cantidad = %s, UnidadMedida = %s, FechaSalida = %s, DepartamentoID = %s, NumeroRequisicion = %s, sin_factura = %s
                             WHERE SalidaID = %s
                         """
-                        cursor.execute(query_update_salida, (nueva_cantidad, nueva_unidad_medida, nueva_fecha, nuevo_departamento_id, nueva_requisicion, salida_id))
+                        cursor.execute(query_update_salida, (nueva_cantidad, nueva_unidad_medida, nueva_fecha, nuevo_departamento_id, nueva_requisicion, nueva_sin_factura_val, salida_id))
 
                         
                         cursor.execute("""
@@ -3440,7 +3527,7 @@ def generar_reporte_salidas():
                             WHERE ProductoID = %s
                         """
                         cursor.execute(query_update_product_latest_info, (latest_fecha_salida_for_product, latest_departamento_id_for_product, producto_id_original))
-                       
+                        
 
                         mydb.commit()
                         messagebox.showinfo("Éxito", "Salida actualizada y stock ajustado correctamente.", parent=ventana_edicion_salida)
@@ -3455,7 +3542,7 @@ def generar_reporte_salidas():
                                 print("WARNING: 'mostrar_tabla' no es accesible globalmente o no es una función llamable desde generar_reporte_salidas. El inventario no se refrescará automáticamente.")
                         except NameError as e:
                             print(f"WARNING: Variables globales para mostrar_tabla no encontradas: {e}. El inventario no se refrescará automáticamente.")
-                       
+                        
 
                         ventana_edicion_salida.destroy()
 
@@ -3471,7 +3558,7 @@ def generar_reporte_salidas():
                             mydb.close()
             
             
-            ttk.Button(ventana_edicion_salida, text="Guardar Cambios", command=guardar_cambios_salida).grid(row=7, column=0, columnspan=3, pady=10)
+            ttk.Button(ventana_edicion_salida, text="Guardar Cambios", command=guardar_cambios_salida).grid(row=8, column=0, columnspan=3, pady=10) # --- MODIFICACIÓN 10: Ajustar la fila del botón ---
             ventana_edicion_salida.grid_columnconfigure(1, weight=1)
             ventana_edicion_salida.mainloop()
         else:
@@ -3484,7 +3571,7 @@ def generar_reporte_salidas():
             item_id = seleccion[0]
             values = tree.item(item_id, "values")
             
-            salida_id = values[7] 
+            salida_id = values[8] # El índice de SalidaID cambia
             cantidad_salida = float(values[2]) 
             codigo_producto = values[0] 
             
@@ -3518,11 +3605,13 @@ def generar_reporte_salidas():
                         query_ajustar_stock = "UPDATE productos SET Stock = Stock + %s WHERE ProductoID = %s"
                         cursor.execute(query_ajustar_stock, (cantidad_salida, producto_id))
 
-                       
+                        
                         cursor.execute("""
                             SELECT MAX(FechaSalida)
                             FROM salidas
                             WHERE ProductoID = %s
+                            ORDER BY FechaSalida DESC, SalidaID DESC
+                            LIMIT 1
                         """, (producto_id,))
                         max_fecha_salida_result = cursor.fetchone()
                         max_fecha_salida_for_product = None
@@ -3539,7 +3628,6 @@ def generar_reporte_salidas():
                         """
                         cursor.execute(query_update_product_latest_salida_date, (max_fecha_salida_for_product, producto_id))
                         
-
 
                         mydb.commit() 
                         messagebox.showinfo("Eliminación Exitosa", "La salida ha sido eliminada y el stock ajustado correctamente.", parent=ventana_reporte_salidas)
@@ -3622,12 +3710,24 @@ def actualizar_tabla_salidas_espera(filtro_busqueda=""):
         mydb = conectar_mysql()
         if mydb:
             cursor = mydb.cursor()
-           
+            
+            # MODIFICACIÓN CLAVE 1: Añadir spe.sin_factura a la SELECT
             query = """
-                SELECT spe.SalidaEsperaID, p.Codigo, p.Nombre, spe.Cantidad, spe.UnidadMedida, d.NombreDepartamento, spe.FechaSolicitud
-                FROM salidas_espera spe
-                JOIN productos p ON spe.ProductoID = p.ProductoID
-                JOIN departamentos d ON spe.DepartamentoID = d.DepartamentoID
+                SELECT 
+                    spe.SalidaEsperaID, 
+                    p.Codigo, 
+                    p.Nombre, 
+                    spe.Cantidad, 
+                    spe.UnidadMedida, 
+                    d.NombreDepartamento, 
+                    spe.FechaSolicitud,
+                    spe.sin_factura  -- ¡Añade esta línea para seleccionar la columna!
+                FROM 
+                    salidas_espera spe
+                JOIN 
+                    productos p ON spe.ProductoID = p.ProductoID
+                JOIN 
+                    departamentos d ON spe.DepartamentoID = d.DepartamentoID
                 WHERE 1=1 -- Cláusula siempre verdadera para facilitar la adición de AND
             """
             params = []
@@ -3643,13 +3743,35 @@ def actualizar_tabla_salidas_espera(filtro_busqueda=""):
                 cursor.execute(query, tuple(params))
                 salidas_espera_db = cursor.fetchall()
                 
-                for espera_id, codigo, producto, cantidad, unidad_medida, departamento_nombre, fecha_solicitud in salidas_espera_db: 
-                   
-                   
+                for row_list in salidas_espera_db: 
+                    
+                    espera_id = row_list[0]
+                    codigo = row_list[1]
+                    producto = row_list[2]
+                    cantidad = row_list[3]
+                    unidad_medida = row_list[4]
+                    departamento_nombre = row_list[5]
+                    fecha_solicitud = row_list[6]
+                    sin_factura_valor = row_list[7] 
+                    sin_factura_display = "Sí" if sin_factura_valor == 1 else "No" if sin_factura_valor == 0 else "N/A" # Añadido N/A para mayor robustez
+
                     fecha_str = fecha_solicitud.strftime("%Y-%m-%d") if fecha_solicitud else ""
-                    tabla_salidas_espera.insert("", tk.END, values=(codigo, producto, cantidad, unidad_medida, departamento_nombre, fecha_str, espera_id))
+                    
+                    
+                    tabla_salidas_espera.insert("", tk.END, values=(
+                        codigo,
+                        producto,
+                        cantidad,
+                        unidad_medida,
+                        departamento_nombre,
+                        fecha_str,
+                        espera_id,          
+                        sin_factura_display  
+                    ))
             except mysql.connector.Error as err:
                 messagebox.showerror("Error", f"Error al actualizar la tabla de salidas en espera: {err}")
+            except Exception as e:
+                messagebox.showerror("Error inesperado", f"Ocurrió un error inesperado al procesar los datos: {e}")
             finally:
                 if mydb and mydb.is_connected():
                     cursor.close()
@@ -3666,10 +3788,10 @@ def generar_reporte_salidas_espera():
             actualizar_tabla_salidas_espera(filtro_actual)
         return
     
-   
+    
     ventana_reporte_salidas_espera = tk.Toplevel(ventana) 
     ventana_reporte_salidas_espera.title("Reporte de Salidas en Espera")
-    ventana_reporte_salidas_espera.geometry("1000x600")
+    ventana_reporte_salidas_espera.geometry("1100x600") 
     ventana_reporte_salidas_espera.configure(bg="#A9A9A9")
     ventana_reporte_salidas_espera.protocol("WM_DELETE_WINDOW", ventana_reporte_salidas_espera.destroy)
 
@@ -3690,15 +3812,16 @@ def generar_reporte_salidas_espera():
     entry_busqueda_espera.pack(side=tk.LEFT, padx=(0, 10), expand=True, fill=tk.X)
 
     boton_exportar_pdf_espera = ttk.Button(frame_controles, text="Exportar a PDF",
-                                            command=lambda: exportar_tabla_pdf(tabla_salidas_espera, "Reporte de Salidas en Espera"))
+                                           command=lambda: exportar_tabla_pdf(tabla_salidas_espera, "Reporte de Salidas en Espera"))
     boton_exportar_pdf_espera.pack(side=tk.RIGHT, padx=(10, 0))
 
     frame_tabla_contenedor = tk.Frame(ventana_reporte_salidas_espera, bg="#A9A9A9")
     frame_tabla_contenedor.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-   
+    
+
     tabla_salidas_espera = ttk.Treeview(frame_tabla_contenedor,
-                                        columns=("Código", "Producto", "Cantidad", "Unidad Medida", "Departamento", "Fecha Solicitud", "EsperaID"),
+                                        columns=("Código", "Producto", "Cantidad", "Unidad Medida", "Departamento", "Fecha Solicitud", "EsperaID", "Sin Factura"),
                                         show="headings",
                                         style="Grid.Treeview")
     tabla_salidas_espera.column("EsperaID", width=0, stretch=tk.NO) 
@@ -3709,6 +3832,7 @@ def generar_reporte_salidas_espera():
     tabla_salidas_espera.heading("Unidad Medida", text="Unidad Medida", anchor=tk.W) 
     tabla_salidas_espera.heading("Departamento", text="Departamento", anchor=tk.W)
     tabla_salidas_espera.heading("Fecha Solicitud", text="Fecha Solicitud", anchor=tk.W)
+    tabla_salidas_espera.heading("Sin Factura", text="Sin Factura", anchor=tk.W) 
 
     tabla_salidas_espera.column("Código", width=100)
     tabla_salidas_espera.column("Producto", width=180)
@@ -3716,6 +3840,7 @@ def generar_reporte_salidas_espera():
     tabla_salidas_espera.column("Unidad Medida", width=100)
     tabla_salidas_espera.column("Departamento", width=150) 
     tabla_salidas_espera.column("Fecha Solicitud", width=120) 
+    tabla_salidas_espera.column("Sin Factura", width=80) 
 
     scrollbar_vertical = ttk.Scrollbar(frame_tabla_contenedor, orient="vertical", command=tabla_salidas_espera.yview)
     scrollbar_vertical.pack(side=tk.RIGHT, fill=tk.Y)
@@ -3729,10 +3854,10 @@ def generar_reporte_salidas_espera():
         if mydb:
             cursor = mydb.cursor()
             try:
-               
+                
                 cursor.execute("SELECT DISTINCT UnidadMedida FROM productos WHERE UnidadMedida IS NOT NULL AND UnidadMedida != '' ORDER BY UnidadMedida")
                 unidades = [row[0] for row in cursor.fetchall()]
-            except mysql.connector.Error as err:
+            except Exception as err: 
                 print(f"Error al cargar unidades de medida: {err}")
             finally:
                 if cursor: cursor.close()
@@ -3746,13 +3871,14 @@ def generar_reporte_salidas_espera():
             values = tabla_salidas_espera.item(item, "values")
 
             
+           
             if len(values) >= 7: 
                 codigo_producto = values[0]
                 producto_nombre = values[1]
                 cantidad_salida = float(values[2])
                 unidad_medida_salida = values[3] 
                 departamento_nombre = values[4]
-               
+                
                 espera_id = values[6] 
 
                 def confirmar_requisicion():
@@ -3774,7 +3900,8 @@ def generar_reporte_salidas_espera():
                         try:
                             mydb.start_transaction() 
 
-                            cursor.execute("SELECT ProductoID, Stock FROM productos WHERE Codigo = %s", (codigo_producto,))
+                            
+                            cursor.execute("SELECT ProductoID, Stock, sin_factura FROM productos WHERE Codigo = %s", (codigo_producto,))
                             resultado_prod = cursor.fetchone()
                             if not resultado_prod:
                                 messagebox.showerror("Error", f"Producto con código '{codigo_producto}' no encontrado.", parent=ventana_requisicion)
@@ -3782,6 +3909,8 @@ def generar_reporte_salidas_espera():
                                 return
                             producto_id_para_salida = resultado_prod[0]
                             stock_actual = resultado_prod[1]
+                            
+                            es_sin_factura_producto = resultado_prod[2] if resultado_prod[2] is not None else 0 # Asegura 0 si es NULL
 
                             if stock_actual < cantidad_salida:
                                 messagebox.showerror("Error de Stock", f"No hay suficiente stock para el producto '{producto_nombre}'. Stock actual: {stock_actual}. Cantidad solicitada: {cantidad_salida}.", parent=ventana_requisicion)
@@ -3797,21 +3926,20 @@ def generar_reporte_salidas_espera():
                             departamento_id_para_salida = resultado_dep[0]
 
                             
+                           
                             query_insert_salida = """
-                                INSERT INTO salidas (ProductoID, CodigoProducto, Cantidad, UnidadMedida, FechaSalida, DepartamentoID, NumeroRequisicion)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                INSERT INTO salidas (ProductoID, CodigoProducto, Cantidad, UnidadMedida, FechaSalida, DepartamentoID, NumeroRequisicion, sin_factura)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             """
-                            cursor.execute(query_insert_salida, (producto_id_para_salida, codigo_producto, cantidad_salida, unidad_medida_salida, fecha_salida, departamento_id_para_salida, numero_requisicion))
+                            cursor.execute(query_insert_salida, (producto_id_para_salida, codigo_producto, cantidad_salida, unidad_medida_salida, fecha_salida, departamento_id_para_salida, numero_requisicion, es_sin_factura_producto))
 
-                          
+                        
                             query_update_producto = """
                                 UPDATE productos
-                                SET Stock = Stock - %s,
-                                    DepartamentoID = %s -- ¡Aquí está el cambio!
+                                SET Stock = Stock - %s
                                 WHERE ProductoID = %s
                             """
-                           
-                            cursor.execute(query_update_producto, (cantidad_salida, departamento_id_para_salida, producto_id_para_salida))
+                            cursor.execute(query_update_producto, (cantidad_salida, producto_id_para_salida))
 
                             
                             query_eliminar_espera = "DELETE FROM salidas_espera WHERE SalidaEsperaID = %s"
@@ -3820,7 +3948,7 @@ def generar_reporte_salidas_espera():
                             mydb.commit() 
                             messagebox.showinfo("Salida Registrada", f"La salida del producto '{producto_nombre}' al departamento '{departamento_nombre}' (Cantidad: {cantidad_salida} {unidad_medida_salida}) ha sido registrada y el inventario actualizado.", parent=ventana_requisicion)
 
-                           
+                            
                             actualizar_tabla_salidas_espera(entry_busqueda_espera.get().strip())
                             
                             
@@ -3828,15 +3956,14 @@ def generar_reporte_salidas_espera():
                                 ventana_requisicion.destroy()
                             
                             
-                            mostrar_tabla() 
+                            
+                            if 'mostrar_tabla' in globals() and callable(mostrar_tabla):
+                                mostrar_tabla() 
                             
 
-                        except mysql.connector.Error as err:
+                        except Exception as err: 
                             mydb.rollback()
-                            messagebox.showerror("Error", f"Error al confirmar la requisición: {err}", parent=ventana_requisicion)
-                        except Exception as e: 
-                            mydb.rollback()
-                            messagebox.showerror("Error Inesperado", f"Ocurrió un error inesperado: {e}", parent=ventana_requisicion)
+                            messagebox.showerror("Error al confirmar la requisición", f"Ocurrió un error: {err}", parent=ventana_requisicion)
                         finally:
                             if mydb and mydb.is_connected():
                                 cursor.close()
@@ -3910,7 +4037,7 @@ def generar_reporte_salidas_espera():
                         mydb.commit()
                         messagebox.showinfo("Eliminación Exitosa", "La solicitud de salida en espera ha sido eliminada correctamente.", parent=ventana_reporte_salidas_espera)
                         actualizar_tabla_salidas_espera(entry_busqueda_espera.get().strip())
-                    except mysql.connector.Error as err:
+                    except Exception as err: 
                         mydb.rollback()
                         messagebox.showerror("Error", f"Error al eliminar la solicitud: {err}", parent=ventana_reporte_salidas_espera)
                     finally:
@@ -3935,6 +4062,7 @@ def generar_reporte_salidas_espera():
             departamento_actual_nombre = values[4]
             fecha_solicitud_actual = values[5] 
             espera_id = values[6] 
+            # sin_factura_actual = values[7] # Ahora también podemos obtenerlo si lo necesitamos para la edición
 
             print(f"DEBUG: Editando solicitud con SalidaEsperaID: {espera_id}")
 
@@ -3971,11 +4099,11 @@ def generar_reporte_salidas_espera():
             
             tk.Label(ventana_edicion, text="Unidad Medida:", fg="#ffffff", bg="#A9A9A9").grid(row=3, column=0, padx=5, pady=5, sticky="w")
             combo_unidad_medida_edicion = ttk.Combobox(ventana_edicion,
-                                                     textvariable=unidad_medida_var,
-                                                     values=obtener_unidades_medida(), 
-                                                     width=30,
-                                                     style="TCombobox",
-                                                     state="readonly")
+                                                       textvariable=unidad_medida_var,
+                                                       values=obtener_unidades_medida(), 
+                                                       width=30,
+                                                       style="TCombobox",
+                                                       state="readonly")
             combo_unidad_medida_edicion.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
             
             if unidad_medida_actual in obtener_unidades_medida():
@@ -4052,7 +4180,7 @@ def generar_reporte_salidas_espera():
                             SET Cantidad = %s, UnidadMedida = %s, DepartamentoID = %s, FechaSolicitud = %s
                             WHERE SalidaEsperaID = %s
                         """
-                       
+                        
                         cursor.execute(query_update_espera, (nueva_cantidad, nueva_unidad_medida, departamento_id_asociado, nueva_fecha_solicitud, espera_id))
 
                         mydb.commit()
@@ -4060,12 +4188,9 @@ def generar_reporte_salidas_espera():
                         actualizar_tabla_salidas_espera(entry_busqueda_espera.get().strip())
                         ventana_edicion.destroy()
 
-                    except mysql.connector.Error as err:
+                    except Exception as err: # Changed from mysql.connector.Error for broader compatibility
                         mydb.rollback()
                         messagebox.showerror("Error de BD", f"Error al actualizar la solicitud de salida en espera: {err}", parent=ventana_edicion)
-                    except Exception as e:
-                        mydb.rollback()
-                        messagebox.showerror("Error", f"Ocurrió un error inesperado: {e}", parent=ventana_edicion)
                     finally:
                         if mydb and mydb.is_connected():
                             cursor.close()
@@ -4097,14 +4222,14 @@ def generar_reporte_salidas_espera():
             tabla_salidas_espera.selection_set(item)
             values = tabla_salidas_espera.item(item, "values")
         
-           
+            
             menu = tk.Menu(tabla_salidas_espera, tearoff=0) 
 
-           
+            
             menu.add_command(label="Agregar Requisición", command=agregar_requisicion)
             
-           
-            if current_user_role_is_admin:
+            
+            if 'current_user_role_is_admin' in globals() and current_user_role_is_admin:
                 menu.add_separator() 
                 menu.add_command(label="Editar Solicitud", command=editar_salida_espera)
                 menu.add_command(label="Eliminar Solicitud", command=eliminar_salida_espera)
@@ -4114,14 +4239,14 @@ def generar_reporte_salidas_espera():
                 menu.add_command(label="Editar Solicitud (Solo Admin)", state=tk.DISABLED)
                 menu.add_command(label="Eliminar Solicitud (Solo Admin)", state=tk.DISABLED)
 
-           
+            
             menu.post(event.x_root, event.y_root)
             
         else:
             
             tabla_salidas_espera.selection_remove(tabla_salidas_espera.selection())
             
-           
+            
             pass
 
 
